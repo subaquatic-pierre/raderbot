@@ -1,7 +1,5 @@
 # Raderbot
 
-Short project description goes here.
-
 ## Table of Contents
 
 - [Project Description](#project-description)
