@@ -31,3 +31,7 @@ pub fn generate_random_id() -> u32 {
     let mut rng = rand::thread_rng();
     rng.gen()
 }
+
+pub fn gen_random_milliseconds() -> u64 {
+    rand::thread_rng().gen_range(1000..3000)
+}

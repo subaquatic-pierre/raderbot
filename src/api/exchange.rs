@@ -1,16 +1,17 @@
-use actix_web::HttpRequest;
+use actix_web::web::Json;
 use actix_web::{
     get,
     web::{self, scope},
     HttpResponse, Responder, Scope,
 };
+use actix_web::{post, HttpRequest};
 
 use serde::Deserialize;
 use serde_json::json;
 
 use crate::app::AppState;
 
-#[get("/exchange-info")]
+#[get("/info")]
 async fn exchange_info(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
     let exchange = app_data.get_exchange_api().await;
 
@@ -54,14 +55,11 @@ pub struct GetKlineParams {
     symbol: String,
     interval: String,
 }
-#[get("/get-kline")]
-async fn get_kline(app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
+#[post("/get-kline")]
+async fn get_kline(app_data: web::Data<AppState>, body: Json<GetKlineParams>) -> impl Responder {
     let exchange_api = app_data.get_exchange_api().await;
-    let params = web::Query::<GetKlineParams>::from_query(req.query_string()).unwrap();
 
-    let kline = exchange_api
-        .get_kline(&params.symbol, &params.interval)
-        .await;
+    let kline = exchange_api.get_kline(&body.symbol, &body.interval).await;
 
     if let Ok(kline) = kline {
         // Return the stream data as JSON
@@ -79,12 +77,11 @@ pub struct GetTickerParams {
     symbol: String,
 }
 
-#[get("/get-ticker")]
-async fn get_ticker(app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
+#[post("/get-ticker")]
+async fn get_ticker(app_data: web::Data<AppState>, body: Json<GetTickerParams>) -> impl Responder {
     let exchange_api = app_data.get_exchange_api().await;
-    let params = web::Query::<GetTickerParams>::from_query(req.query_string()).unwrap();
 
-    let ticker = exchange_api.get_ticker(&params.symbol).await;
+    let ticker = exchange_api.get_ticker(&body.symbol).await;
 
     if let Ok(ticker) = ticker {
         // Return the stream data as JSON

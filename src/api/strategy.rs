@@ -22,10 +22,8 @@ async fn new_strategy(
     body: web::Json<NewStrategyParams>,
 ) -> impl Responder {
     let bot = app_data.bot.clone();
-    let market = bot.lock().await.market.clone();
-    let strategy = Strategy::new(&body.symbol, market);
 
-    let strategy_id = bot.lock().await.add_strategy(strategy).await;
+    let strategy_id = bot.lock().await.add_strategy(&body.symbol).await;
 
     let json_data = json!({ "success": "Strategy started","strategy_id":strategy_id });
 
@@ -61,9 +59,25 @@ async fn get_strategies(app_data: web::Data<AppState>) -> impl Responder {
     HttpResponse::Ok().json(json_data)
 }
 
+#[get("/stop-all-strategies")]
+async fn stop_all_strategies(app_data: web::Data<AppState>) -> impl Responder {
+    let bot = app_data.bot.clone();
+
+    let strategies = bot.lock().await.get_strategies().await;
+
+    for id in &strategies {
+        bot.lock().await.stop_strategy(id).await;
+    }
+
+    let json_data = json!({ "strategies_stopped": strategies });
+
+    HttpResponse::Ok().json(json_data)
+}
+
 pub fn register_strategy_service() -> Scope {
     scope("/strategy")
         .service(new_strategy)
         .service(stop_strategy)
         .service(get_strategies)
+        .service(stop_all_strategies)
 }

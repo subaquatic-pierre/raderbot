@@ -1,9 +1,10 @@
-use actix_web::HttpRequest;
+use actix_web::web::Json;
 use actix_web::{
     get,
     web::{self, scope},
     HttpResponse, Responder, Scope,
 };
+use actix_web::{post, HttpRequest};
 
 use serde::Deserialize;
 use serde_json::json;
@@ -11,13 +12,6 @@ use serde_json::json;
 use crate::exchange::types::StreamType;
 
 use crate::app::AppState;
-
-#[get("/meta")]
-async fn get_market_meta(_app_data: web::Data<AppState>) -> impl Responder {
-    let json_data = json!({ "success": "Market meta data" });
-    // Stream ID not found
-    HttpResponse::Ok().json(json_data)
-}
 
 #[derive(Debug, Deserialize)]
 pub struct GetKlineDataParams {
@@ -27,21 +21,22 @@ pub struct GetKlineDataParams {
     to_ts: Option<u64>,
     limit: Option<usize>,
 }
-#[get("/kline-data")]
-async fn get_kline_data(app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let params = web::Query::<GetKlineDataParams>::from_query(req.query_string()).unwrap();
-
+#[post("/kline-data")]
+async fn get_kline_data(
+    app_data: web::Data<AppState>,
+    body: Json<GetKlineDataParams>,
+) -> impl Responder {
     let market = app_data.get_market().await;
 
     let kline_data = market
         .lock()
         .await
         .kline_data(
-            &params.symbol,
-            &params.interval,
-            params.from_ts,
-            params.to_ts,
-            params.limit,
+            &body.symbol,
+            &body.interval,
+            body.from_ts,
+            body.to_ts,
+            body.limit,
         )
         .await;
 
@@ -61,32 +56,34 @@ pub struct GetTickerDataParams {
     symbol: String,
 }
 
-#[get("/last-price")]
-async fn last_price(app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let params = web::Query::<GetTickerDataParams>::from_query(req.query_string()).unwrap();
-
+#[post("/last-price")]
+async fn last_price(
+    app_data: web::Data<AppState>,
+    body: Json<GetTickerDataParams>,
+) -> impl Responder {
     let market = app_data.get_market().await;
 
-    let last_price = market.lock().await.last_price(&params.symbol).await;
+    let last_price = market.lock().await.last_price(&body.symbol).await;
 
     if let Some(last_price) = last_price {
         // Return the stream data as JSON
-        let json_data = json!({ "last_price": last_price,"symbol":params.symbol });
+        let json_data = json!({ "last_price": last_price,"symbol":body.symbol });
         HttpResponse::Ok().json(json_data)
     } else {
-        let json_data = json!({ "error": "Last price not found","symbol":params.symbol });
+        let json_data = json!({ "error": "Last price not found","symbol":body.symbol });
         // Stream ID not found
         HttpResponse::Ok().json(json_data)
     }
 }
 
-#[get("/ticker-data")]
-async fn get_ticker_data(app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let params = web::Query::<GetTickerDataParams>::from_query(req.query_string()).unwrap();
-
+#[post("/ticker-data")]
+async fn get_ticker_data(
+    app_data: web::Data<AppState>,
+    body: Json<GetTickerDataParams>,
+) -> impl Responder {
     let market = app_data.get_market().await;
 
-    let ticker_data = market.lock().await.ticker_data(&params.symbol).await;
+    let ticker_data = market.lock().await.ticker_data(&body.symbol).await;
 
     if let Some(ticker_data) = ticker_data {
         // Return the stream data as JSON
@@ -122,13 +119,14 @@ async fn active_streams(app_data: web::Data<AppState>) -> impl Responder {
 pub struct CloseStreamParams {
     stream_id: String,
 }
-#[get("/close-stream")]
-async fn close_stream(app_data: web::Data<AppState>, req: HttpRequest) -> HttpResponse {
-    let params = web::Query::<CloseStreamParams>::from_query(req.query_string()).unwrap();
-
+#[post("/close-stream")]
+async fn close_stream(
+    app_data: web::Data<AppState>,
+    body: Json<CloseStreamParams>,
+) -> HttpResponse {
     let market = app_data.get_market().await;
 
-    let stream_meta = market.lock().await.close_stream(&params.stream_id).await;
+    let stream_meta = market.lock().await.close_stream(&body.stream_id).await;
 
     // TODO: handle error
     match stream_meta {
@@ -138,7 +136,7 @@ async fn close_stream(app_data: web::Data<AppState>, req: HttpRequest) -> HttpRe
         }
         None => {
             let json_data =
-                json!({ "error": format!("Stream width ID {} not found", &params.stream_id) });
+                json!({ "error": format!("Stream width ID {} not found", &body.stream_id) });
             // Stream ID not found
             HttpResponse::Ok().json(json_data)
         }
@@ -151,19 +149,20 @@ pub struct OpenStreamParams {
     symbol: String,
     interval: Option<String>,
 }
-#[get("/open-stream")]
-async fn open_stream(app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let params = web::Query::<OpenStreamParams>::from_query(req.query_string()).unwrap();
-
-    let stream_type = params.stream_type.clone();
+#[post("/open-stream")]
+async fn open_stream(
+    app_data: web::Data<AppState>,
+    body: Json<OpenStreamParams>,
+) -> impl Responder {
+    let stream_type = body.stream_type.clone();
     let market = app_data.get_market().await;
 
     // TODO: handle errors
 
     let stream_id = match stream_type {
         StreamType::Kline => {
-            let symbol = params.symbol.to_string();
-            let interval = params.interval.clone().unwrap().to_string();
+            let symbol = body.symbol.to_string();
+            let interval = body.interval.clone().unwrap().to_string();
             market
                 .lock()
                 .await
@@ -171,7 +170,7 @@ async fn open_stream(app_data: web::Data<AppState>, req: HttpRequest) -> impl Re
                 .await
         }
         StreamType::Ticker => {
-            let symbol = params.symbol.to_string();
+            let symbol = body.symbol.to_string();
             market
                 .lock()
                 .await
@@ -192,14 +191,14 @@ async fn open_stream(app_data: web::Data<AppState>, req: HttpRequest) -> impl Re
     HttpResponse::Ok().json(data)
 }
 
-#[get("/remote-kline")]
-async fn get_remote_kline(app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
+#[post("/remote-kline")]
+async fn get_remote_kline(
+    app_data: web::Data<AppState>,
+    body: Json<GetKlineDataParams>,
+) -> impl Responder {
     let exchange_api = app_data.get_exchange_api().await;
-    let params = web::Query::<GetKlineDataParams>::from_query(req.query_string()).unwrap();
 
-    let kline = exchange_api
-        .get_kline(&params.symbol, &params.interval)
-        .await;
+    let kline = exchange_api.get_kline(&body.symbol, &body.interval).await;
 
     if let Ok(kline) = kline {
         // Return the stream data as JSON
@@ -218,7 +217,6 @@ pub fn register_market_service() -> Scope {
         .service(last_price)
         .service(close_stream)
         .service(open_stream)
-        .service(get_market_meta)
         .service(get_kline_data)
         .service(get_market_data)
         .service(active_streams)

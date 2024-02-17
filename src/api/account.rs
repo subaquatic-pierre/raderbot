@@ -1,9 +1,9 @@
-use actix_web::HttpRequest;
 use actix_web::{
     get,
-    web::{self, scope},
+    web::{self, scope, Json},
     HttpResponse, Responder, Scope,
 };
+use actix_web::{post, HttpRequest};
 
 use serde::Deserialize;
 use serde_json::json;
@@ -15,11 +15,12 @@ use crate::app::AppState;
 pub struct ClosePosParams {
     position_id: u64,
 }
-#[get("/close-position")]
-async fn close_position(_app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let _params = web::Query::<ClosePosParams>::from_query(req.query_string()).unwrap();
-
-    let json_data = json!({ "success": "Position Closed","position_id":42 });
+#[post("/close-position")]
+async fn close_position(
+    _app_data: web::Data<AppState>,
+    body: Json<ClosePosParams>,
+) -> impl Responder {
+    let json_data = json!({ "success": "Position Closed","position_id":body.position_id });
 
     HttpResponse::Ok().json(json_data)
 }
@@ -32,20 +33,19 @@ pub struct OpenPosParams {
     order_side: OrderSide,
     stop_loss: Option<f64>,
 }
-#[get("/open-position")]
-async fn open_position(app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let params = web::Query::<OpenPosParams>::from_query(req.query_string()).unwrap();
+#[post("/open-position")]
+async fn open_position(app_data: web::Data<AppState>, body: Json<OpenPosParams>) -> impl Responder {
     let account = app_data.get_account().await;
 
     let res = account
         .lock()
         .await
         .open_position(
-            &params.symbol,
-            params.margin,
-            params.leverage,
-            params.order_side.clone(),
-            params.stop_loss,
+            &body.symbol,
+            body.margin,
+            body.leverage,
+            body.order_side.clone(),
+            body.stop_loss,
         )
         .await;
 
@@ -54,7 +54,7 @@ async fn open_position(app_data: web::Data<AppState>, req: HttpRequest) -> impl 
         HttpResponse::Ok().json(json_data)
     } else {
         let json_data = json!({ "error": "Unable to open position" });
-        HttpResponse::Ok().json(json_data)
+        HttpResponse::ExpectationFailed().json(json_data)
     }
 }
 
@@ -95,9 +95,4 @@ pub fn register_account_service() -> Scope {
         .service(open_position)
         .service(close_position)
         .service(list_positions)
-    // .service(get_market_meta)
-    // .service(get_kline_data)
-    // .service(get_market_data)
-    // .service(active_streams)
-    // .service(get_ticker_data)
 }

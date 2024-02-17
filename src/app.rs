@@ -1,6 +1,6 @@
 use actix_web::web::Data;
 use dotenv_codegen::dotenv;
-use log::info;
+use log::{info, warn};
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
@@ -18,9 +18,8 @@ use crate::{
 };
 
 use tokio::{
-    signal::unix::Signal,
     sync::watch::{channel, Receiver, Sender},
-    task::JoinHandle,
+    task::{AbortHandle, JoinHandle},
 };
 
 use crate::Message;
@@ -32,8 +31,10 @@ pub struct RaderBot {
     // pub stream_manager: ArcMutex<StreamManager>,
     pub account: ArcMutex<Account>,
     pub exchange_api: Arc<Box<dyn ExchangeApi>>,
-    strategy_rxs: HashMap<String, JoinHandle<()>>,
+    strategy_handles: HashMap<String, JoinHandle<()>>,
     strategies: HashMap<String, Strategy>,
+    strategy_rx: ArcReceiver<SignalMessage>,
+    strategy_tx: ArcSender<SignalMessage>,
 }
 
 impl RaderBot {
@@ -63,44 +64,43 @@ impl RaderBot {
 
         let account = ArcMutex::new(account);
 
-        Self {
+        let (strategy_tx, strategy_rx) = build_arc_channel::<SignalMessage>();
+
+        let mut _self = Self {
             market,
             // stream_manager,
             account,
             exchange_api: exchange_api.clone(),
-            strategy_rxs: HashMap::new(),
+            strategy_handles: HashMap::new(),
             strategies: HashMap::new(),
-        }
+            strategy_rx,
+            strategy_tx,
+        };
+
+        _self.init().await;
+
+        _self
     }
 
-    pub async fn add_strategy(&mut self, strategy: Strategy) -> String {
-        let (strategy_id, strategy_rx) = strategy.start().await;
+    pub async fn add_strategy(&mut self, symbol: &str) -> String {
+        let market = self.market.clone();
+        let strategy_tx = self.strategy_tx.clone();
+        let strategy = Strategy::new(symbol, strategy_tx, market);
 
-        let strategy_handle = tokio::spawn(async move {
-            while let Some(signal) = strategy_rx.lock().await.recv().await {
-                info!("{signal:?}");
+        let handle = strategy.start().await;
+        let strategy_id = strategy.id.to_string();
 
-                // Place order with account
-                // account
-                //     .lock()
-                //     .await
-                //     .open_position(&signal.symbol, 1.0, 1, signal.order_side, None)
-                //     .await;
-            }
-        });
+        self.strategy_handles.insert(strategy_id.clone(), handle);
+        self.strategies.insert(strategy_id.clone(), strategy);
 
-        self.strategy_rxs
-            .insert(strategy_id.to_string(), strategy_handle);
-        self.strategies.insert(strategy_id.to_string(), strategy);
-
-        strategy_id.to_string()
+        strategy_id.clone()
     }
 
     pub async fn stop_strategy(&mut self, strategy_id: &str) -> String {
-        if let Some(handle) = self.strategy_rxs.get(strategy_id) {
+        if let Some(handle) = self.strategy_handles.get(strategy_id) {
             handle.abort();
 
-            self.strategy_rxs.remove(&strategy_id.to_string());
+            self.strategy_handles.remove(&strategy_id.to_string());
             self.strategies.remove(strategy_id);
         }
         strategy_id.to_string()
@@ -113,6 +113,16 @@ impl RaderBot {
         }
 
         strategies
+    }
+
+    pub async fn init(&mut self) {
+        let strategy_rx = self.strategy_rx.clone();
+
+        tokio::spawn(async move {
+            while let Some(signal) = strategy_rx.lock().await.recv().await {
+                info!("{signal:?}");
+            }
+        });
     }
 }
 

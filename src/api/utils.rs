@@ -1,11 +1,12 @@
 use std::fs;
 
-use actix_web::HttpRequest;
+use actix_web::web::Json;
 use actix_web::{
     get,
     web::{self, scope},
     HttpResponse, Responder, Scope,
 };
+use actix_web::{post, HttpRequest};
 use directories::UserDirs;
 use serde::Deserialize;
 use serde_json::json;
@@ -33,10 +34,9 @@ pub struct DateToTsParams {
     day: u32,
 }
 
-#[get("/date-to-timestamp")]
-async fn date_to_timestamp(req: HttpRequest) -> impl Responder {
-    let params = web::Query::<DateToTsParams>::from_query(req.query_string()).unwrap();
-    let (year, month, day) = (params.year, params.month, params.day);
+#[post("/date-to-timestamp")]
+async fn date_to_timestamp(body: Json<DateToTsParams>) -> impl Responder {
+    let (year, month, day) = (body.year, body.month, body.day);
 
     let timestamp = year_month_day_to_ts(year, month, day);
 
@@ -113,11 +113,12 @@ struct TimeDifParams {
     from_ts: u64,
     to_ts: u64,
 }
-#[get("/time-difference")]
-async fn time_difference(_app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let params = web::Query::<TimeDifParams>::from_query(req.query_string()).unwrap();
-
-    let difference = get_time_difference(params.from_ts, params.to_ts);
+#[post("/time-difference")]
+async fn time_difference(
+    _app_data: web::Data<AppState>,
+    body: Json<TimeDifParams>,
+) -> impl Responder {
+    let difference = get_time_difference(body.from_ts, body.to_ts);
 
     // Return the stream data as JSON
     let json_data = json!({ "difference": difference });
