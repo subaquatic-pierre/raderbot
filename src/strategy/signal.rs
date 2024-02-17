@@ -9,7 +9,7 @@ pub struct SignalMessage {
     pub strategy_id: String,
     pub order_side: OrderSide,
     pub symbol: String,
-    pub price: Option<f64>,
+    pub price: f64,
 }
 
 // impl Display for SignalMessage {

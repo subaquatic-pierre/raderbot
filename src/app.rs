@@ -13,7 +13,7 @@ use crate::{
         types::{ArcMutex, ArcReceiver, ArcSender},
     },
     storage::manager::StorageManager,
-    strategy::{signal::SignalMessage, strategy::Strategy},
+    strategy::{algorithm::MovingAverage, signal::SignalMessage, strategy::Strategy},
     utils::channel::build_arc_channel,
 };
 
@@ -85,7 +85,8 @@ impl RaderBot {
     pub async fn add_strategy(&mut self, symbol: &str) -> String {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
-        let strategy = Strategy::new(symbol, strategy_tx, market);
+        let algo = MovingAverage::new();
+        let strategy = Strategy::new(symbol, strategy_tx, market, Box::new(algo));
 
         let handle = strategy.start().await;
         let strategy_id = strategy.id.to_string();
