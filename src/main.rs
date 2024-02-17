@@ -6,13 +6,15 @@ use actix_files::Files;
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 
-use web::{
+use api::{
     account::register_account_service, exchange::register_exchange_service,
-    main::register_main_service, market::register_market_service, utils::register_utils_service,
+    main::register_main_service, market::register_market_service,
+    strategy::register_strategy_service, utils::register_utils_service,
 };
 
 #[allow(unused_must_use)]
 mod account;
+mod api;
 mod app;
 mod exchange;
 mod market;
@@ -20,7 +22,6 @@ mod storage;
 mod strategy;
 mod trade;
 mod utils;
-mod web;
 
 const SERVER_HOST: (&str, u16) = ("127.0.0.1", 3000);
 
@@ -54,6 +55,7 @@ async fn main() -> io::Result<()> {
             .service(register_main_service())
             .service(register_utils_service())
             .service(register_account_service())
+            .service(register_strategy_service())
     })
     // .listen(listener)?
     .bind(SERVER_HOST)?

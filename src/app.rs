@@ -1,17 +1,27 @@
 use actix_web::web::Data;
 use dotenv_codegen::dotenv;
+use log::info;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     account::account::Account,
     exchange::{api::ExchangeApi, bingx::BingXApi, stream::StreamManager},
-    market::{market::Market, messages::MarketMessage, types::ArcMutex},
+    market::{
+        market::Market,
+        messages::MarketMessage,
+        types::{ArcMutex, ArcReceiver, ArcSender},
+    },
     storage::manager::StorageManager,
+    strategy::{signal::SignalMessage, strategy::Strategy},
     utils::channel::build_arc_channel,
 };
 
-use tokio::sync::watch::{channel, Receiver, Sender};
+use tokio::{
+    signal::unix::Signal,
+    sync::watch::{channel, Receiver, Sender},
+    task::JoinHandle,
+};
 
 use crate::Message;
 
@@ -22,6 +32,8 @@ pub struct RaderBot {
     // pub stream_manager: ArcMutex<StreamManager>,
     pub account: ArcMutex<Account>,
     pub exchange_api: Arc<Box<dyn ExchangeApi>>,
+    strategy_rxs: HashMap<String, JoinHandle<()>>,
+    strategies: HashMap<String, Strategy>,
 }
 
 impl RaderBot {
@@ -56,7 +68,51 @@ impl RaderBot {
             // stream_manager,
             account,
             exchange_api: exchange_api.clone(),
+            strategy_rxs: HashMap::new(),
+            strategies: HashMap::new(),
         }
+    }
+
+    pub async fn add_strategy(&mut self, strategy: Strategy) -> String {
+        let (strategy_id, strategy_rx) = strategy.start().await;
+
+        let strategy_handle = tokio::spawn(async move {
+            while let Some(signal) = strategy_rx.lock().await.recv().await {
+                info!("{signal:?}");
+
+                // Place order with account
+                // account
+                //     .lock()
+                //     .await
+                //     .open_position(&signal.symbol, 1.0, 1, signal.order_side, None)
+                //     .await;
+            }
+        });
+
+        self.strategy_rxs
+            .insert(strategy_id.to_string(), strategy_handle);
+        self.strategies.insert(strategy_id.to_string(), strategy);
+
+        strategy_id.to_string()
+    }
+
+    pub async fn stop_strategy(&mut self, strategy_id: &str) -> String {
+        if let Some(handle) = self.strategy_rxs.get(strategy_id) {
+            handle.abort();
+
+            self.strategy_rxs.remove(&strategy_id.to_string());
+            self.strategies.remove(strategy_id);
+        }
+        strategy_id.to_string()
+    }
+
+    pub async fn get_strategies(&mut self) -> Vec<String> {
+        let mut strategies = vec![];
+        for (strategy_id, _strategy) in self.strategies.iter() {
+            strategies.push(strategy_id.to_string())
+        }
+
+        strategies
     }
 }
 
@@ -84,14 +140,14 @@ impl WsManager {
         }
     }
 
-    pub fn get_ticker_stream(&self, symbol: &str) -> Receiver<String> {
+    pub async fn get_ticker_stream(&self, symbol: &str) -> Receiver<String> {
         if let Some(rec) = self.receivers.get(symbol) {
             rec.clone()
         } else {
             let (sender, receiver) = channel::<String>("".to_string());
 
             // spawn new ticker thread
-            self.spawn_ticker_thread(symbol, sender);
+            self.spawn_ticker_thread(symbol, sender).await;
             receiver
         }
     }
@@ -120,9 +176,9 @@ impl AppState {
         self.bot.lock().await.account.clone()
     }
 
-    pub async fn get_bot(&self) -> ArcMutex<RaderBot> {
-        self.bot.clone()
-    }
+    // pub async fn get_bot(&self) -> ArcMutex<RaderBot> {
+    //     self.bot.clone()
+    // }
 
     pub async fn get_market(&self) -> ArcMutex<Market> {
         self.bot.lock().await.market.clone()
