@@ -9,7 +9,7 @@ use actix_web::{post, HttpRequest};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::app::AppState;
+use crate::bot::AppState;
 
 #[get("/info")]
 async fn exchange_info(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {

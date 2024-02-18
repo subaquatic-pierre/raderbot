@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::exchange::types::StreamType;
 
-use crate::app::AppState;
+use crate::bot::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct GetKlineDataParams {

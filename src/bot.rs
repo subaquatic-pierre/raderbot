@@ -1,3 +1,4 @@
+use actix::fut::future::result;
 use actix_web::web::Data;
 use dotenv_codegen::dotenv;
 use log::{info, warn};
@@ -13,7 +14,11 @@ use crate::{
         types::{ArcMutex, ArcReceiver, ArcSender},
     },
     storage::manager::StorageManager,
-    strategy::{algorithm::MovingAverage, signal::SignalMessage, strategy::Strategy},
+    strategy::{
+        algorithm::MovingAverage,
+        strategy::{BackTestResult, Strategy},
+        types::SignalMessage,
+    },
     utils::channel::build_arc_channel,
 };
 
@@ -82,11 +87,23 @@ impl RaderBot {
         _self
     }
 
-    pub async fn add_strategy(&mut self, symbol: &str) -> String {
+    pub async fn add_strategy(
+        &mut self,
+        strategy_name: &str,
+        symbol: &str,
+        interval: &str,
+    ) -> String {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
         let algo = MovingAverage::new();
-        let strategy = Strategy::new(symbol, strategy_tx, market, Box::new(algo));
+        let strategy = Strategy::new(
+            strategy_name,
+            symbol,
+            interval,
+            strategy_tx,
+            market,
+            Box::new(algo),
+        );
 
         let handle = strategy.start().await;
         let strategy_id = strategy.id.to_string();
@@ -104,6 +121,7 @@ impl RaderBot {
             self.strategy_handles.remove(&strategy_id.to_string());
             self.strategies.remove(strategy_id);
         }
+
         strategy_id.to_string()
     }
 
@@ -116,7 +134,35 @@ impl RaderBot {
         strategies
     }
 
-    pub async fn init(&mut self) {
+    pub async fn run_back_test(
+        &mut self,
+        strategy_name: &str,
+        symbol: &str,
+        interval: &str,
+        from_ts: u64,
+        to_ts: u64,
+    ) -> BackTestResult {
+        let market = self.market.clone();
+        let strategy_tx = self.strategy_tx.clone();
+        let algo = MovingAverage::new();
+
+        let strategy = Strategy::new(
+            strategy_name,
+            symbol,
+            interval,
+            strategy_tx,
+            market,
+            Box::new(algo),
+        );
+
+        strategy.run_back_test(from_ts, to_ts).await
+    }
+
+    // ---
+    // Private Methods
+    // ---
+
+    async fn init(&mut self) {
         let strategy_rx = self.strategy_rx.clone();
 
         tokio::spawn(async move {

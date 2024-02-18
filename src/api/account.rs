@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::account::trade::OrderSide;
-use crate::app::AppState;
+use crate::bot::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct ClosePosParams {

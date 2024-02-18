@@ -11,7 +11,7 @@ use directories::UserDirs;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::app::AppState;
+use crate::bot::AppState;
 use crate::market::market::MarketData;
 use crate::utils::crypt::sign_hmac;
 use crate::utils::kline::{
@@ -50,8 +50,17 @@ async fn date_to_timestamp(body: Json<DateToTsParams>) -> impl Responder {
     HttpResponse::Ok().json(json_data)
 }
 
-#[get("/load-klines")]
-async fn load_klines(_app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
+#[derive(Debug, Deserialize)]
+struct LoadKlineParams {
+    filename: String,
+    symbol: String,
+    interval: String,
+}
+#[post("/load-klines")]
+async fn load_klines(
+    _app_data: web::Data<AppState>,
+    _body: Json<LoadKlineParams>,
+) -> impl Responder {
     let user_dirs = UserDirs::new().expect("Failed to get user directories");
     let home_dir = user_dirs.home_dir();
     let data_dir = home_dir.join("Projects/BinanceData");

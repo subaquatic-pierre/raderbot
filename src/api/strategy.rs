@@ -1,3 +1,4 @@
+use actix_web::web::Json;
 use actix_web::HttpRequest;
 use actix_web::{
     get, post,
@@ -5,16 +6,18 @@ use actix_web::{
     HttpResponse, Responder, Scope,
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::account::trade::OrderSide;
-use crate::app::AppState;
+use crate::bot::AppState;
 use crate::strategy::strategy::Strategy;
 
 #[derive(Debug, Deserialize)]
 pub struct NewStrategyParams {
     symbol: String,
+    strategy_name: String,
+    interval: String,
 }
 #[post("/new-strategy")]
 async fn new_strategy(
@@ -23,7 +26,11 @@ async fn new_strategy(
 ) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let strategy_id = bot.lock().await.add_strategy(&body.symbol).await;
+    let strategy_id = bot
+        .lock()
+        .await
+        .add_strategy(&body.symbol, &body.strategy_name, &body.interval)
+        .await;
 
     let json_data = json!({ "success": "Strategy started","strategy_id":strategy_id });
 
@@ -74,10 +81,43 @@ async fn stop_all_strategies(app_data: web::Data<AppState>) -> impl Responder {
     HttpResponse::Ok().json(json_data)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RunBackTestParams {
+    symbol: String,
+    strategy_name: String,
+    interval: String,
+    from_ts: u64,
+    to_ts: u64,
+}
+#[post("/run-back-test")]
+async fn run_back_test(
+    app_data: web::Data<AppState>,
+    body: Json<RunBackTestParams>,
+) -> impl Responder {
+    let bot = app_data.bot.clone();
+
+    let result = bot
+        .lock()
+        .await
+        .run_back_test(
+            &body.strategy_name,
+            &body.symbol,
+            &body.interval,
+            body.from_ts,
+            body.to_ts,
+        )
+        .await;
+
+    let json_data = json!({ "result": result });
+
+    HttpResponse::Ok().json(json_data)
+}
+
 pub fn register_strategy_service() -> Scope {
     scope("/strategy")
         .service(new_strategy)
         .service(stop_strategy)
         .service(get_strategies)
         .service(stop_all_strategies)
+        .service(run_back_test)
 }

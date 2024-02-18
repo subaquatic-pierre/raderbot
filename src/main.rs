@@ -1,4 +1,4 @@
-use app::new_app_state;
+use bot::new_app_state;
 use dotenv::dotenv;
 use std::io;
 
@@ -15,7 +15,7 @@ use api::{
 #[allow(unused_must_use)]
 mod account;
 mod api;
-mod app;
+mod bot;
 mod exchange;
 mod market;
 mod storage;
