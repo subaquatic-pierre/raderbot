@@ -23,18 +23,40 @@ impl MovingAverage {
             data_points: vec![],
         }
     }
+
+    fn calculate_moving_average(&self, period: usize) -> f64 {
+        let start_index = self.data_points.len().saturating_sub(period); // Avoid index underflow
+
+        let sum: f64 = self
+            .data_points
+            .iter()
+            .rev()
+            .skip(start_index)
+            .map(|k| k.close)
+            .sum();
+
+        let divisor = usize::min(period, self.data_points.len()); // Ensure divisor is not zero
+
+        sum / divisor as f64
+    }
 }
 
 impl Algorithm for MovingAverage {
     fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
-        self.data_points.push(kline);
-        // TODO: Loop over all data, run eval
-        for point in &self.data_points {}
+        self.data_points.push(kline.clone());
 
-        if self.data_points.len() % 3 == 0 {
-            AlgorithmEvalResult::Buy
-        } else if self.data_points.len() % 3 == 1 {
-            AlgorithmEvalResult::Sell
+        // Set the moving average period
+        let ma_period = 30;
+
+        if self.data_points.len() >= ma_period {
+            let ma = self.calculate_moving_average(ma_period);
+
+            // Placeholder logic for buy/sell decision
+            if kline.close > ma {
+                AlgorithmEvalResult::Buy
+            } else {
+                AlgorithmEvalResult::Sell
+            }
         } else {
             AlgorithmEvalResult::Ignore
         }

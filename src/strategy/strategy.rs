@@ -109,10 +109,7 @@ impl Strategy {
         let mut algorithm = self.algorithm.lock().await;
         let interval = self.interval.clone();
 
-        let mut result = BackTestResult {
-            strategy_name: self.strategy_name.to_string(),
-            signals: vec![],
-        };
+        let mut result = BackTestResult::new(&self.strategy_name);
 
         let market = market.clone();
         let kline_data = market
@@ -124,10 +121,6 @@ impl Strategy {
         if let Some(kline_data) = kline_data {
             for kline in kline_data.klines {
                 let eval_result = algorithm.evaluate(kline.clone());
-
-                if algorithm.data_points().len() > 20 {
-                    break;
-                }
 
                 let order_side = match eval_result {
                     AlgorithmEvalResult::Buy => OrderSide::Buy,
@@ -148,6 +141,8 @@ impl Strategy {
             }
         }
 
+        result.calculate_strategy_profit_loss();
+
         result
     }
 }
@@ -156,10 +151,49 @@ impl Strategy {
 pub struct BackTestResult {
     pub strategy_name: String,
     pub signals: Vec<SignalMessage>,
+    pub balance: f64,
+    pub positions: i32,
+    pub buy_count: u32,
+    pub sell_count: u32,
 }
 
 impl BackTestResult {
+    pub fn new(strategy_name: &str) -> Self {
+        Self {
+            strategy_name: strategy_name.to_string(),
+            signals: vec![],
+            balance: 10_000.0,
+            positions: 0,
+            buy_count: 0,
+            sell_count: 0,
+        }
+    }
     pub fn add_signal(&mut self, signal: SignalMessage) {
         self.signals.push(signal)
+    }
+
+    pub fn calculate_strategy_profit_loss(&mut self) {
+        let mut last_price: f64 = 0.0;
+        for signal in &self.signals {
+            match signal.order_side {
+                OrderSide::Buy => {
+                    self.positions += 1;
+                    self.balance -= signal.price;
+                    self.buy_count += 1
+                }
+                OrderSide::Sell => {
+                    self.positions -= 1;
+                    self.balance += signal.price;
+                    self.sell_count += 1
+                }
+            }
+            last_price = signal.price;
+        }
+
+        if self.positions.is_negative() {
+            self.balance -= last_price * self.positions.abs() as f64;
+        } else {
+            self.balance += last_price * self.positions.abs() as f64;
+        }
     }
 }

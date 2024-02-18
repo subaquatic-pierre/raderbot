@@ -4,6 +4,7 @@
 
 - [Overview](#overview)
 - [Features](#features)
+- [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -24,6 +25,47 @@ Raderbot is a Rust-based trading bot designed to interact with the BingX WebSock
 ## Roadmap
 
 The project is currently in the development phase.
+
+## Development
+
+### Prerequisites
+
+Make sure you have the following tools installed on your system:
+
+- [Rust](https://www.rust-lang.org/): The programming language used for the project.
+- [cargo-watch](https://crates.io/crates/cargo-watch): Used for automatically restarting the server during development.
+- [make](https://www.gnu.org/software/make/): Used for managing development tasks.
+
+### Getting Started
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/subaquatic-pierre/rader-bot.git
+
+   ```
+
+2. Navigate to the project directory:
+
+```bash
+cd rader-bot
+```
+
+3. Build and run the project:
+
+```bash
+make watch
+```
+
+This command will start the Actix server and automatically restart it when code changes are detected.
+
+### Cleaning Up
+
+To clean up build artifacts, run:
+
+```bash
+make clean
+```
 
 ## Contributing
 
