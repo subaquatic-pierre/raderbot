@@ -59,42 +59,36 @@ impl Strategy {
         tokio::spawn(async move {
             loop {
                 let market = market.clone();
-                let kline_data = market
-                    .lock()
-                    .await
-                    .kline_data(&symbol, &interval, None, None, None)
-                    .await;
+                let kline_data = market.lock().await.kline_data(&symbol, &interval).await;
 
                 if kline_data.is_none() {
                     time::sleep(INTERVAL).await;
                     continue;
                 } else {
-                    let kline_data = kline_data.unwrap();
-                    if let Some(kline) = kline_data.klines.last() {
-                        let order_side = algorithm.lock().await.evaluate(kline.clone());
+                    let kline = kline_data.unwrap();
+                    let order_side = algorithm.lock().await.evaluate(kline.clone());
 
-                        let order_side = match order_side {
-                            AlgorithmEvalResult::Buy => OrderSide::Buy,
-                            AlgorithmEvalResult::Sell => OrderSide::Sell,
-                            AlgorithmEvalResult::Ignore => {
-                                continue;
-                            }
-                        };
-
-                        let signal = SignalMessage {
-                            strategy_id: id.clone(),
-                            order_side,
-                            symbol: symbol.clone(),
-                            price: kline.close,
-                        };
-
-                        if strategy_tx.is_closed() {
-                            break;
+                    let order_side = match order_side {
+                        AlgorithmEvalResult::Buy => OrderSide::Buy,
+                        AlgorithmEvalResult::Sell => OrderSide::Sell,
+                        AlgorithmEvalResult::Ignore => {
+                            continue;
                         }
+                    };
 
-                        if let Err(e) = strategy_tx.send(signal) {
-                            log::warn!("Unable to send signal back to RaderBot, {e}")
-                        }
+                    let signal = SignalMessage {
+                        strategy_id: id.clone(),
+                        order_side,
+                        symbol: symbol.clone(),
+                        price: kline.close,
+                    };
+
+                    if strategy_tx.is_closed() {
+                        break;
+                    }
+
+                    if let Err(e) = strategy_tx.send(signal) {
+                        log::warn!("Unable to send signal back to RaderBot, {e}")
                     }
 
                     time::sleep(INTERVAL).await;
@@ -115,7 +109,7 @@ impl Strategy {
         let kline_data = market
             .lock()
             .await
-            .kline_data(&symbol, &interval, Some(from_ts), Some(to_ts), None)
+            .kline_data_range(&symbol, &interval, Some(from_ts), Some(to_ts), None)
             .await;
 
         if let Some(kline_data) = kline_data {

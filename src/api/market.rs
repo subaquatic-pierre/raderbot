@@ -17,9 +17,6 @@ use crate::bot::AppState;
 pub struct GetKlineDataParams {
     symbol: String,
     interval: String,
-    from_ts: Option<u64>,
-    to_ts: Option<u64>,
-    limit: Option<usize>,
 }
 #[post("/kline-data")]
 async fn get_kline_data(
@@ -31,7 +28,39 @@ async fn get_kline_data(
     let kline_data = market
         .lock()
         .await
-        .kline_data(
+        .kline_data(&body.symbol, &body.interval)
+        .await;
+
+    if let Some(kline_data) = kline_data {
+        // Return the stream data as JSON
+        let json_data = json!({ "kline_data": kline_data });
+        HttpResponse::Ok().json(json_data)
+    } else {
+        let json_data = json!({ "error": "Kline data not found" });
+        // Stream ID not found
+        HttpResponse::Ok().json(json_data)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetKlineDataRangeParams {
+    symbol: String,
+    interval: String,
+    from_ts: Option<u64>,
+    to_ts: Option<u64>,
+    limit: Option<usize>,
+}
+#[post("/kline-data-range")]
+async fn get_kline_data_range(
+    app_data: web::Data<AppState>,
+    body: Json<GetKlineDataRangeParams>,
+) -> impl Responder {
+    let market = app_data.get_market().await;
+
+    let kline_data = market
+        .lock()
+        .await
+        .kline_data_range(
             &body.symbol,
             &body.interval,
             body.from_ts,
@@ -191,33 +220,13 @@ async fn open_stream(
     HttpResponse::Ok().json(data)
 }
 
-#[post("/remote-kline")]
-async fn get_remote_kline(
-    app_data: web::Data<AppState>,
-    body: Json<GetKlineDataParams>,
-) -> impl Responder {
-    let exchange_api = app_data.get_exchange_api().await;
-
-    let kline = exchange_api.get_kline(&body.symbol, &body.interval).await;
-
-    if let Ok(kline) = kline {
-        // Return the stream data as JSON
-        let json_data = json!({ "ticker_data": kline });
-        HttpResponse::Ok().json(json_data)
-    } else {
-        let json_data = json!({ "error": "Ticker data not found" });
-        // Stream ID not found
-        HttpResponse::Ok().json(json_data)
-    }
-}
-
 pub fn register_market_service() -> Scope {
     scope("/market")
-        .service(get_remote_kline)
         .service(last_price)
         .service(close_stream)
         .service(open_stream)
         .service(get_kline_data)
+        .service(get_kline_data_range)
         .service(get_market_data)
         .service(active_streams)
         .service(get_ticker_data)

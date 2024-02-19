@@ -27,6 +27,7 @@ use crate::{
     },
 };
 
+use super::ticker;
 use super::types::ArcMutex;
 
 pub trait MarketDataSymbol {
@@ -54,6 +55,8 @@ impl MarketData {
     }
 
     pub fn add_kline(&mut self, kline: Kline) {
+        // TODO: Ensure memory is recycled, remove old data
+
         // get kline key eg. BTCUSDT@kline_1m
         let kline_key = Self::build_kline_key(&kline.symbol, &kline.interval);
 
@@ -255,12 +258,28 @@ impl Market {
     // ---
 
     pub async fn last_price(&self, symbol: &str) -> Option<f64> {
-        let ticker = self.data.lock().await.ticker_data(symbol);
+        let ticker = match self.data.lock().await.ticker_data(symbol) {
+            Some(ticker) => Some(ticker.ticker),
+            None => {
+                let ticker = match self.exchange_api.get_ticker(symbol).await {
+                    Ok(ticker) => Some(ticker),
+                    Err(_) => None,
+                };
+                ticker
+            }
+        };
 
-        ticker.map(|ticker| ticker.ticker.last_price)
+        ticker.map(|ticker| ticker.last_price)
     }
 
-    pub async fn kline_data(
+    pub async fn kline_data(&self, symbol: &str, interval: &str) -> Option<Kline> {
+        match self.exchange_api.get_kline(symbol, interval).await {
+            Ok(kline) => Some(kline),
+            Err(_) => None,
+        }
+    }
+
+    pub async fn kline_data_range(
         &self,
         symbol: &str,
         interval: &str,
@@ -274,8 +293,9 @@ impl Market {
             .kline_data(symbol, interval, from_ts, to_ts, limit)
     }
 
-    pub async fn ticker_data(&self, symbol: &str) -> Option<TickerData> {
-        self.data.lock().await.ticker_data(symbol)
+    pub async fn ticker_data(&self, symbol: &str) -> Option<Ticker> {
+        let ticker_data = self.data.lock().await.ticker_data(symbol);
+        ticker_data.map(|ticker| ticker.ticker)
     }
 
     pub async fn market_data(&self) -> MarketData {
