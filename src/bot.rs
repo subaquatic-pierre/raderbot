@@ -14,11 +14,11 @@ use crate::{
     },
     storage::manager::StorageManager,
     strategy::{
-        algorithm::MovingAverage,
+        algorithm::{build_algorithm, MovingAverage},
         strategy::{BackTest, Strategy},
         types::SignalMessage,
     },
-    utils::channel::build_arc_channel,
+    utils::{channel::build_arc_channel, time::build_interval},
 };
 
 use tokio::{
@@ -91,26 +91,32 @@ impl RaderBot {
         strategy_name: &str,
         symbol: &str,
         interval: &str,
-    ) -> String {
+    ) -> Option<String> {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
-        let algo = MovingAverage::new();
-        let strategy = Strategy::new(
-            strategy_name,
-            symbol,
-            interval,
-            strategy_tx,
-            market,
-            Box::new(algo),
-        );
+        let algorithm = build_algorithm(strategy_name, interval);
 
-        let handle = strategy.start().await;
-        let strategy_id = strategy.id.to_string();
+        match algorithm {
+            Ok(algorithm) => {
+                let strategy = Strategy::new(
+                    strategy_name,
+                    symbol,
+                    interval,
+                    strategy_tx,
+                    market,
+                    algorithm,
+                );
 
-        self.strategy_handles.insert(strategy_id.clone(), handle);
-        self.strategies.insert(strategy_id.clone(), strategy);
+                let handle = strategy.start().await;
+                let strategy_id = strategy.id.to_string();
 
-        strategy_id.clone()
+                self.strategy_handles.insert(strategy_id.clone(), handle);
+                self.strategies.insert(strategy_id.clone(), strategy);
+
+                Some(strategy_id.clone())
+            }
+            Err(e) => None,
+        }
     }
 
     pub async fn stop_strategy(&mut self, strategy_id: &str) -> String {
@@ -140,21 +146,26 @@ impl RaderBot {
         interval: &str,
         from_ts: u64,
         to_ts: u64,
-    ) -> BackTest {
+    ) -> Option<BackTest> {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
-        let algo = MovingAverage::new();
+        let algorithm = build_algorithm(strategy_name, interval);
 
-        let strategy = Strategy::new(
-            strategy_name,
-            symbol,
-            interval,
-            strategy_tx,
-            market,
-            Box::new(algo),
-        );
+        match algorithm {
+            Ok(algorithm) => {
+                let strategy = Strategy::new(
+                    strategy_name,
+                    symbol,
+                    interval,
+                    strategy_tx,
+                    market,
+                    algorithm,
+                );
 
-        strategy.run_back_test(from_ts, to_ts).await
+                Some(strategy.run_back_test(from_ts, to_ts).await)
+            }
+            Err(_) => None,
+        }
     }
 
     // ---

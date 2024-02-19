@@ -1,5 +1,4 @@
 use actix_web::web::Json;
-use actix_web::HttpRequest;
 use actix_web::{
     get, post,
     web::{self, scope},
@@ -9,9 +8,7 @@ use actix_web::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::account::trade::OrderSide;
 use crate::bot::AppState;
-use crate::strategy::strategy::Strategy;
 
 #[derive(Debug, Deserialize)]
 pub struct NewStrategyParams {
@@ -29,12 +26,20 @@ async fn new_strategy(
     let strategy_id = bot
         .lock()
         .await
-        .add_strategy(&body.symbol, &body.strategy_name, &body.interval)
+        .add_strategy(&body.strategy_name, &body.symbol, &body.interval)
         .await;
 
-    let json_data = json!({ "success": "Strategy started","strategy_id":strategy_id });
+    match strategy_id {
+        Some(strategy_id) => {
+            let json_data = json!({ "success": "Strategy started","strategy_id":strategy_id });
 
-    HttpResponse::Ok().json(json_data)
+            HttpResponse::Ok().json(json_data)
+        }
+        None => {
+            let json_data = json!({ "error": "Unable to find strategy_name"});
+            HttpResponse::ExpectationFailed().json(json_data)
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,9 +113,17 @@ async fn run_back_test(
         )
         .await;
 
-    let json_data = json!({ "result": result });
+    match result {
+        Some(result) => {
+            let json_data = json!({ "result": result });
 
-    HttpResponse::Ok().json(json_data)
+            HttpResponse::Ok().json(json_data)
+        }
+        None => {
+            let json_data = json!({ "error": "Unable to find strategy_name"});
+            HttpResponse::ExpectationFailed().json(json_data)
+        }
+    }
 }
 
 pub fn register_strategy_service() -> Scope {

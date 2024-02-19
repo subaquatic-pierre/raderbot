@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{self};
 
 use serde::{Deserialize, Serialize};
 
@@ -19,4 +19,19 @@ pub enum AlgorithmEvalResult {
     Buy,
     Sell,
     Ignore,
+}
+
+#[derive(Debug)]
+pub enum AlgorithmError {
+    UnkownName(String),
+    UnknownInterval(String),
+}
+
+impl fmt::Display for AlgorithmError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AlgorithmError::UnkownName(msg) => write!(f, "Unknown Name error: {}", msg),
+            AlgorithmError::UnknownInterval(msg) => write!(f, "Unknown Interval error: {}", msg),
+        }
+    }
 }

@@ -4,6 +4,7 @@ use chrono::NaiveDate;
 use chrono::Utc;
 use chrono::{NaiveDateTime, TimeZone};
 
+use std::time::Duration;
 use std::time::SystemTime;
 
 pub fn generate_ts() -> u64 {
@@ -94,4 +95,11 @@ pub fn calculate_kline_open_time(close_time: u64, interval: &str) -> u64 {
 
     // Calculate the open time by subtracting interval seconds from the close time
     (close_time + 1) - (interval_seconds * 1000)
+}
+
+pub fn build_interval(interval: &str) -> Option<Duration> {
+    match interval {
+        "1m" => Some(Duration::from_secs(60)),
+        _ => None,
+    }
 }
