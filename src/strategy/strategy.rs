@@ -97,13 +97,13 @@ impl Strategy {
         })
     }
 
-    pub async fn run_back_test(&self, from_ts: u64, to_ts: u64) -> BackTestResult {
+    pub async fn run_back_test(&self, from_ts: u64, to_ts: u64) -> BackTest {
         let market = self.market.clone();
         let symbol = self.symbol.clone();
         let mut algorithm = self.algorithm.lock().await;
         let interval = self.interval.clone();
 
-        let mut result = BackTestResult::new(&self.strategy_name);
+        let mut result = BackTest::new(&self.strategy_name);
 
         let market = market.clone();
         let kline_data = market
@@ -142,7 +142,7 @@ impl Strategy {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct BackTestResult {
+pub struct BackTest {
     pub strategy_name: String,
     pub signals: Vec<SignalMessage>,
     pub balance: f64,
@@ -151,7 +151,7 @@ pub struct BackTestResult {
     pub sell_count: u32,
 }
 
-impl BackTestResult {
+impl BackTest {
     pub fn new(strategy_name: &str) -> Self {
         Self {
             strategy_name: strategy_name.to_string(),

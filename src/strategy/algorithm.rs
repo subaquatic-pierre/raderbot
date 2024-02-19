@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-use super::types::{AlgorithmEvalResult, AlgorithmInputType};
+use super::types::AlgorithmEvalResult;
 
 pub trait Algorithm: Send + Sync {
     fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult;
@@ -64,5 +64,12 @@ impl Algorithm for MovingAverage {
 
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
+    }
+}
+
+pub fn build_algorithm(algorithm_name: &str) -> Option<Box<dyn Algorithm>> {
+    match algorithm_name {
+        "MovingAverage" => Some(Box::new(MovingAverage::new())),
+        _ => None,
     }
 }

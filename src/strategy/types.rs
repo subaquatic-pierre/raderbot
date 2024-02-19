@@ -20,8 +20,3 @@ pub enum AlgorithmEvalResult {
     Sell,
     Ignore,
 }
-
-pub enum AlgorithmInputType {
-    Kline(KlineData),
-    Ticket(TickerData),
-}
