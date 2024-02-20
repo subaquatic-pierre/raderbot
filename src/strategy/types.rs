@@ -2,12 +2,9 @@ use std::fmt::{self};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    account::trade::OrderSide,
-    market::{kline::KlineData, ticker::TickerData},
-};
+use crate::account::trade::OrderSide;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SignalMessage {
     pub strategy_id: String,
     pub order_side: OrderSide,

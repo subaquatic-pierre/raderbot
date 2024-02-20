@@ -2,7 +2,7 @@ use actix_web::web::Data;
 use dotenv_codegen::dotenv;
 use log::{info, warn};
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     account::account::Account,
@@ -14,29 +14,25 @@ use crate::{
     },
     storage::manager::StorageManager,
     strategy::{
-        algorithm::{build_algorithm, MovingAverage},
-        strategy::{BackTest, Strategy},
-        types::SignalMessage,
+        backer::{BackTest, BackTestResult},
+        signal::SignalManager,
+        strategy::{Strategy, StrategySettings},
+        types::{AlgorithmError, SignalMessage},
     },
-    utils::{channel::build_arc_channel, time::build_interval},
+    utils::channel::build_arc_channel,
 };
 
-use tokio::{
-    sync::watch::{channel, Receiver, Sender},
-    task::{AbortHandle, JoinHandle},
-};
+use tokio::task::{AbortHandle, JoinHandle};
 
 use crate::Message;
 
 pub struct RaderBot {
     pub market: ArcMutex<Market>,
-    // TODO: remove stream manager
-    // only handle streams through the market field
-    // pub stream_manager: ArcMutex<StreamManager>,
     pub account: ArcMutex<Account>,
     pub exchange_api: Arc<Box<dyn ExchangeApi>>,
-    strategy_handles: HashMap<String, JoinHandle<()>>,
-    strategies: HashMap<String, Strategy>,
+    signal_manager: ArcMutex<SignalManager>,
+    strategy_handles: HashMap<u32, JoinHandle<()>>,
+    strategies: HashMap<u32, Strategy>,
     strategy_rx: ArcReceiver<SignalMessage>,
     strategy_tx: ArcSender<SignalMessage>,
 }
@@ -64,15 +60,17 @@ impl RaderBot {
 
         let market = ArcMutex::new(market);
 
-        let account = Account::new(market.clone(), exchange_api.clone()).await;
+        let account = Account::new(market.clone(), exchange_api.clone(), false).await;
 
         let account = ArcMutex::new(account);
 
         let (strategy_tx, strategy_rx) = build_arc_channel::<SignalMessage>();
 
+        let signal_manager = ArcMutex::new(SignalManager::new(account.clone()));
+
         let mut _self = Self {
             market,
-            // stream_manager,
+            signal_manager,
             account,
             exchange_api: exchange_api.clone(),
             strategy_handles: HashMap::new(),
@@ -91,49 +89,52 @@ impl RaderBot {
         strategy_name: &str,
         symbol: &str,
         interval: &str,
-    ) -> Option<String> {
+    ) -> Result<u32, AlgorithmError> {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
-        let algorithm = build_algorithm(strategy_name, interval);
 
-        match algorithm {
-            Ok(algorithm) => {
-                let strategy = Strategy::new(
-                    strategy_name,
-                    symbol,
-                    interval,
-                    strategy_tx,
-                    market,
-                    algorithm,
-                );
+        let strategy = Strategy::new(
+            strategy_name,
+            symbol,
+            interval,
+            strategy_tx,
+            market,
+            StrategySettings::default(),
+        )?;
 
-                let handle = strategy.start().await;
-                let strategy_id = strategy.id.to_string();
+        let handle = strategy.start().await;
+        let strategy_id = strategy.id;
 
-                self.strategy_handles.insert(strategy_id.clone(), handle);
-                self.strategies.insert(strategy_id.clone(), strategy);
+        self.signal_manager
+            .lock()
+            .await
+            .add_strategy_settings(strategy_id, strategy.settings());
 
-                Some(strategy_id.clone())
-            }
-            Err(e) => None,
-        }
+        self.strategy_handles.insert(strategy.id, handle);
+        self.strategies.insert(strategy.id, strategy);
+
+        Ok(strategy_id)
     }
 
-    pub async fn stop_strategy(&mut self, strategy_id: &str) -> String {
-        if let Some(handle) = self.strategy_handles.get(strategy_id) {
+    pub async fn stop_strategy(&mut self, strategy_id: u32) -> String {
+        if let Some(handle) = self.strategy_handles.get(&strategy_id) {
             handle.abort();
 
-            self.strategy_handles.remove(&strategy_id.to_string());
-            self.strategies.remove(strategy_id);
+            self.strategy_handles.remove(&strategy_id);
+            self.strategies.remove(&strategy_id);
+            self.signal_manager
+                .lock()
+                .await
+                .remove_strategy_settings(strategy_id)
         }
 
         strategy_id.to_string()
     }
 
-    pub async fn get_strategies(&mut self) -> Vec<String> {
+    pub async fn get_strategies(&mut self) -> Vec<u32> {
         let mut strategies = vec![];
         for (strategy_id, _strategy) in self.strategies.iter() {
-            strategies.push(strategy_id.to_string())
+            strategies.push(*strategy_id)
         }
 
         strategies
@@ -146,26 +147,31 @@ impl RaderBot {
         interval: &str,
         from_ts: u64,
         to_ts: u64,
-    ) -> Option<BackTest> {
-        let market = self.market.clone();
+    ) -> Result<BackTestResult, AlgorithmError> {
         let strategy_tx = self.strategy_tx.clone();
-        let algorithm = build_algorithm(strategy_name, interval);
+        let strategy = Strategy::new(
+            strategy_name,
+            symbol,
+            interval,
+            strategy_tx,
+            self.market.clone(),
+            StrategySettings::default(),
+        )?;
 
-        match algorithm {
-            Ok(algorithm) => {
-                let strategy = Strategy::new(
-                    strategy_name,
-                    symbol,
-                    interval,
-                    strategy_tx,
-                    market,
-                    algorithm,
-                );
+        let mut back_test = BackTest::new(strategy).await;
 
-                Some(strategy.run_back_test(from_ts, to_ts).await)
-            }
-            Err(_) => None,
-        }
+        if let Some(kline_data) = self
+            .market
+            .clone()
+            .lock()
+            .await
+            .kline_data_range(&symbol, &interval, Some(from_ts), Some(to_ts), None)
+            .await
+        {
+            back_test.run(kline_data).await;
+        };
+
+        Ok(back_test.result())
     }
 
     // ---
@@ -173,17 +179,16 @@ impl RaderBot {
     // ---
 
     async fn init(&mut self) {
+        let signal_manager = self.signal_manager.clone();
         let strategy_rx = self.strategy_rx.clone();
 
         tokio::spawn(async move {
             while let Some(signal) = strategy_rx.lock().await.recv().await {
-                info!("{signal:?}");
+                signal_manager.lock().await.handle_signal(signal);
             }
         });
     }
 }
-
-pub const INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct AppState {
     pub bot: ArcMutex<RaderBot>,

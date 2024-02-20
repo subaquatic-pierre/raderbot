@@ -10,20 +10,30 @@ use crate::{
 };
 
 pub struct Account {
+    initial_balance: f64,
     market: ArcMutex<Market>,
     positions: ArcMutex<HashMap<String, Position>>,
     exchange_api: Arc<Box<dyn ExchangeApi>>,
 }
 
 impl Account {
-    pub async fn new(market: ArcMutex<Market>, exchange_api: Arc<Box<dyn ExchangeApi>>) -> Self {
+    pub async fn new(
+        market: ArcMutex<Market>,
+        exchange_api: Arc<Box<dyn ExchangeApi>>,
+        init_stop_loss_monitor: bool,
+    ) -> Self {
+        // let initial_balance = exchange_api
+        //     .get_account_balance()
+        //     .await
+        //     .unwrap_or_else(|e| 0.0);
         let _self = Self {
             market,
             positions: ArcMutex::new(HashMap::new()),
             exchange_api,
+            initial_balance: 0.0,
         };
 
-        _self.init().await;
+        _self.init(init_stop_loss_monitor).await;
         _self
     }
 
@@ -71,28 +81,6 @@ impl Account {
                 let position_id = Arc::new(position_id.to_string());
 
                 method_res = Some(res);
-
-                // spawn thread to update last price
-                tokio::spawn(async move {
-                    // clone position id to use in thread
-                    let position_id = position_id.to_string();
-                    loop {
-                        if let Some(position) = positions.lock().await.get_mut(&position_id) {
-                            if let Some(last_price) =
-                                market.lock().await.last_price(&symbol.to_string()).await
-                            {
-                                position.last_price = last_price;
-                            } else {
-                                // last price not found on market
-                                // TODO: alert market not receiving price for symbol
-                                // close position, end price update loop
-                                break;
-                            };
-                        }
-
-                        sleep(Duration::from_secs(1)).await;
-                    }
-                });
             };
         };
 
@@ -110,24 +98,33 @@ impl Account {
             .collect()
     }
 
-    pub async fn init(&self) {
+    pub async fn init(&self, init_stop_loss_monitor: bool) {
         // monitor positions stop loss
-        self.init_stop_loss_monitor().await
+        if init_stop_loss_monitor {
+            self.init_stop_loss_monitor().await
+        }
     }
 
     async fn init_stop_loss_monitor(&self) {
+        let market = self.market.clone();
         let positions = self.positions.clone();
 
         tokio::spawn(async move {
             loop {
                 for (_id, position) in positions.lock().await.iter() {
                     // get last price from position
-                    let last_price = position.last_price;
 
-                    if let Some(stop_loss) = position.stop_loss {
-                        if last_price < stop_loss {
-                            // TODO: close position if stop loss hit
-                            println!("Stop loss hit")
+                    if let Some(last_price) = market
+                        .lock()
+                        .await
+                        .last_price(&position.symbol.to_string())
+                        .await
+                    {
+                        if let Some(stop_loss) = position.stop_loss {
+                            if last_price < stop_loss {
+                                // TODO: close position if stop loss hit
+                                println!("Stop loss hit")
+                            }
                         }
                     }
 
@@ -136,7 +133,8 @@ impl Account {
                     // check if
                 }
 
-                sleep(Duration::from_secs(1)).await;
+                // only check stop loss hit every 1min
+                sleep(Duration::from_secs(60)).await;
             }
         });
     }

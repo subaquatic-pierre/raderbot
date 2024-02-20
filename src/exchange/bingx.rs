@@ -79,6 +79,10 @@ impl BingXApi {
 
 #[async_trait]
 impl ExchangeApi for BingXApi {
+    async fn get_account_balance(&self) -> ApiResult<f64> {
+        unimplemented!()
+    }
+
     // TODO: Remove methods from trait
     async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline> {
         get_bingx_kline(symbol, interval).await
@@ -456,136 +460,3 @@ pub async fn get_bingx_ticker(symbol: &str) -> ApiResult<Ticker> {
 
     Ok(ticker)
 }
-
-// Tungsenite WS implemenation for Kline
-// let (mut org_ws_stream, _) = connect_async(stream_meta.url.to_string())
-//                     .await
-//                     .unwrap_or_else(|_| {
-//                         panic!(
-//                             "Unable to create new kline stream for stream type: {} with symbol: {}",
-//                             stream_meta.stream_type, stream_meta.symbol
-//                         )
-//                     });
-
-//                 // build subscribe message
-//                 let uuid = Uuid::new_v4();
-//                 uuid.hyphenated().to_string();
-//                 let msg =
-//                     json!({"id":uuid,"dataType":"market.kline.BTC-USDT.1min", "reqType": "sub"})
-//                         .to_string();
-//                 // let msg = json!({"id":uuid,"dataType":stream_meta.id.clone(), "reqType": "sub"})
-//                 //     .to_string();
-
-//                 println!("Message sent to websocket:{msg}",);
-//                 // send subscribe message
-
-//                 org_ws_stream
-//                     .send(tokio_tungstenite::tungstenite::Message::Text(msg.clone()))
-//                     .await
-//                     .unwrap_or_else(|_| panic!("Unable to send subscribe message to API: {}", msg));
-
-//                 // Split the Websocket to use sync to close connection
-//                 let (sync, mut ws_stream) = org_ws_stream.split();
-
-//                 let stream_metas = self.stream_metas();
-
-//                 stream_metas
-//                     .lock()
-//                     .await
-//                     .insert(stream_meta.id.to_string(), stream_meta.clone());
-
-//                 let sync = ArcMutex::new(sync);
-//                 self.kline_streams
-//                     .insert(stream_meta.id.clone(), sync.clone());
-
-//                 let market_sender = self.market_sender.clone();
-
-//                 let thread_stream_id = stream_meta.id.clone();
-
-//                 // Spawn client web socket to listen for kline
-//                 tokio::spawn(async move {
-//                     while let Some(result) = ws_stream.next().await {
-//                         match result {
-//                             // Forward message to receiver
-//                             Ok(msg) => match msg {
-//                                 // Handle received message
-//                                 // If text message then can create new Kline
-//                                 Message::Text(text) => {
-//                                     println!("Message received from Web socket API: {text}");
-//                                     // create json from text message
-//                                     let json = serde_json::from_str::<Value>(&text)
-//                                         .expect("Unable to parse JSON from web socket message");
-
-//                                     // get data type from json
-//                                     let data_type = json
-//                                         .get("dataType")
-//                                         .expect("Unable to get dataType from web socket message")
-//                                         .to_string();
-
-//                                     // build regex pattern to match for kline message
-//                                     let pattern = r"^@kline_";
-//                                     let re = Regex::new(pattern).unwrap();
-
-//                                     // check text is kline data message
-//                                     if re.is_match(&data_type) {
-//                                         if let Some(stream_meta) =
-//                                             stream_metas.lock().await.get_mut(&thread_stream_id)
-//                                         {
-//                                             stream_meta.last_update = generate_ts();
-//                                             match stream_meta.stream_type {
-//                                                 StreamType::Kline => {
-//                                                     let kline = BingXApi::parse_kline(
-//                                                         &text,
-//                                                         &stream_meta.symbol,
-//                                                         &stream_meta.interval.clone().unwrap(),
-//                                                     );
-//                                                     let _ = market_sender
-//                                                         .send(MarketMessage::UpdateKline(kline));
-//                                                 }
-//                                                 StreamType::Ticker => {
-//                                                     let ticker = BingXApi::parse_ticker(&text);
-
-//                                                     let _ = market_sender
-//                                                         .send(MarketMessage::UpdateTicker(ticker));
-//                                                 }
-//                                             }
-//                                         };
-//                                     } else {
-//                                         println!("Not kline data message");
-//                                     }
-//                                 }
-
-//                                 Message::Close(_frame) => {
-//                                     if let Some(stream_meta) =
-//                                         stream_metas.lock().await.get(&thread_stream_id)
-//                                     {
-//                                         let mut stream_meta = stream_meta.clone();
-//                                         stream_meta.status = "closed".to_string();
-//                                     };
-//                                 }
-
-//                                 Message::Ping(_data) => {
-//                                     sync.lock().await.send(Message::Pong(vec![123]));
-//                                     // ignore Ping Pong Messages
-//                                 }
-//                                 Message::Pong(_data) => {
-//                                     // ignore Ping Pong Messages
-//                                 }
-//                                 Message::Binary(data) => {
-//                                     let json = parse_gzip_to_json(data);
-
-//                                     if let Ok(json) = json {
-//                                         println!("Binary Gzip data: {:?}", json);
-//                                     }
-//                                 }
-//                                 _ => {
-//                                     println!("Received unexpected data: {:?}", msg);
-//                                 }
-//                             },
-//                             Err(e) => {
-//                                 // Handle error
-//                                 eprintln!("Error receiving message: {:?}", e);
-//                             }
-//                         }
-//                     }
-//                 });

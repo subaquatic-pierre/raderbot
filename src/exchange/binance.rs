@@ -75,6 +75,10 @@ impl BinanceApi {
 
 #[async_trait]
 impl ExchangeApi for BinanceApi {
+    async fn get_account_balance(&self) -> ApiResult<f64> {
+        unimplemented!()
+    }
+
     fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>> {
         self.stream_manager.clone()
     }

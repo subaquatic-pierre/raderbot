@@ -30,12 +30,12 @@ async fn new_strategy(
         .await;
 
     match strategy_id {
-        Some(strategy_id) => {
+        Ok(strategy_id) => {
             let json_data = json!({ "success": "Strategy started","strategy_id":strategy_id });
 
             HttpResponse::Ok().json(json_data)
         }
-        None => {
+        Err(_e) => {
             let json_data = json!({ "error": "Unable to find strategy_name"});
             HttpResponse::ExpectationFailed().json(json_data)
         }
@@ -44,7 +44,7 @@ async fn new_strategy(
 
 #[derive(Debug, Deserialize)]
 pub struct StopStrategyParams {
-    strategy_id: String,
+    strategy_id: u32,
 }
 #[post("/stop-strategy")]
 async fn stop_strategy(
@@ -53,7 +53,7 @@ async fn stop_strategy(
 ) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let strategy_id = bot.lock().await.stop_strategy(&body.strategy_id).await;
+    let strategy_id = bot.lock().await.stop_strategy(body.strategy_id).await;
 
     let json_data = json!({ "success": "Strategy stopped","strategy_id":strategy_id });
 
@@ -78,7 +78,7 @@ async fn stop_all_strategies(app_data: web::Data<AppState>) -> impl Responder {
     let strategies = bot.lock().await.get_strategies().await;
 
     for id in &strategies {
-        bot.lock().await.stop_strategy(id).await;
+        bot.lock().await.stop_strategy(*id).await;
     }
 
     let json_data = json!({ "strategies_stopped": strategies });
@@ -114,13 +114,13 @@ async fn run_back_test(
         .await;
 
     match result {
-        Some(result) => {
+        Ok(result) => {
             let json_data = json!({ "result": result });
 
             HttpResponse::Ok().json(json_data)
         }
-        None => {
-            let json_data = json!({ "error": "Unable to find strategy_name"});
+        Err(e) => {
+            let json_data = json!({ "error": e.to_string()});
             HttpResponse::ExpectationFailed().json(json_data)
         }
     }

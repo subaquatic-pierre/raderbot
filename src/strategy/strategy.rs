@@ -2,12 +2,10 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use tokio::time;
 
-use crate::market::kline::Kline;
+use crate::market::kline::KlineData;
 use crate::utils::number::generate_random_id;
 use crate::{
     account::trade::OrderSide,
-    bot::INTERVAL,
-    exchange::api::ExchangeApi,
     market::{
         market::Market,
         types::{ArcMutex, ArcSender},
@@ -15,16 +13,17 @@ use crate::{
     strategy::algorithm::Algorithm,
 };
 
-use super::types::{AlgorithmEvalResult, SignalMessage};
+use super::algorithm::AlgorithmBuilder;
+use super::types::{AlgorithmError, AlgorithmEvalResult, SignalMessage};
 
 pub struct Strategy {
-    pub id: String,
-    strategy_name: String,
-    symbol: String,
+    pub id: u32,
+    pub symbol: String,
     interval: String,
     market: ArcMutex<Market>,
     strategy_tx: ArcSender<SignalMessage>,
-    algorithm: ArcMutex<Box<dyn Algorithm>>,
+    pub algorithm: ArcMutex<Box<dyn Algorithm>>,
+    settings: StrategySettings,
 }
 
 impl Strategy {
@@ -34,17 +33,19 @@ impl Strategy {
         interval: &str,
         strategy_tx: ArcSender<SignalMessage>,
         market: ArcMutex<Market>,
-        algorithm: Box<dyn Algorithm>,
-    ) -> Self {
-        Self {
-            id: generate_random_id().to_string(),
+        settings: StrategySettings,
+    ) -> Result<Self, AlgorithmError> {
+        let algorithm = AlgorithmBuilder::build_algorithm(strategy_name, interval)?;
+
+        Ok(Self {
+            id: generate_random_id(),
             market,
             interval: interval.to_string(),
-            strategy_name: strategy_name.to_string(),
             symbol: symbol.to_string(),
             strategy_tx,
             algorithm: ArcMutex::new(algorithm),
-        }
+            settings,
+        })
     }
 
     pub async fn start(&self) -> JoinHandle<()> {
@@ -54,18 +55,14 @@ impl Strategy {
         let id = self.id.clone();
         let symbol = self.symbol.clone();
         let algorithm = self.algorithm.clone();
-        let interval = self.interval.clone();
+        let interval_str = self.interval.clone();
+        let interval_duration = algorithm.lock().await.interval();
 
         tokio::spawn(async move {
             loop {
                 let market = market.clone();
-                let kline_data = market.lock().await.kline_data(&symbol, &interval).await;
 
-                if kline_data.is_none() {
-                    time::sleep(INTERVAL).await;
-                    continue;
-                } else {
-                    let kline = kline_data.unwrap();
+                if let Some(kline) = market.lock().await.kline_data(&symbol, &interval_str).await {
                     let order_side = algorithm.lock().await.evaluate(kline.clone());
 
                     let order_side = match order_side {
@@ -77,7 +74,7 @@ impl Strategy {
                     };
 
                     let signal = SignalMessage {
-                        strategy_id: id.clone(),
+                        strategy_id: id.to_string(),
                         order_side,
                         symbol: symbol.clone(),
                         price: kline.close,
@@ -90,104 +87,25 @@ impl Strategy {
                     if let Err(e) = strategy_tx.send(signal) {
                         log::warn!("Unable to send signal back to RaderBot, {e}")
                     }
+                };
 
-                    time::sleep(INTERVAL).await;
-                }
+                time::sleep(interval_duration).await;
             }
         })
     }
 
-    pub async fn run_back_test(&self, from_ts: u64, to_ts: u64) -> BackTest {
-        let market = self.market.clone();
-        let symbol = self.symbol.clone();
-        let mut algorithm = self.algorithm.lock().await;
-        let interval = self.interval.clone();
-
-        let mut result = BackTest::new(&self.strategy_name);
-
-        let market = market.clone();
-        let kline_data = market
-            .lock()
-            .await
-            .kline_data_range(&symbol, &interval, Some(from_ts), Some(to_ts), None)
-            .await;
-
-        if let Some(kline_data) = kline_data {
-            for kline in kline_data.klines {
-                let eval_result = algorithm.evaluate(kline.clone());
-
-                let order_side = match eval_result {
-                    AlgorithmEvalResult::Buy => OrderSide::Buy,
-                    AlgorithmEvalResult::Sell => OrderSide::Sell,
-                    AlgorithmEvalResult::Ignore => {
-                        continue;
-                    }
-                };
-
-                let signal = SignalMessage {
-                    strategy_id: self.id.clone(),
-                    order_side,
-                    symbol: symbol.clone(),
-                    price: kline.close.clone(),
-                };
-
-                result.add_signal(signal)
-            }
-        }
-
-        result.calculate_strategy_profit_loss();
-
-        result
+    pub fn settings(&self) -> StrategySettings {
+        self.settings.clone()
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BackTest {
-    pub strategy_name: String,
-    pub signals: Vec<SignalMessage>,
-    pub balance: f64,
-    pub positions: i32,
-    pub buy_count: u32,
-    pub sell_count: u32,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StrategySettings {
+    pub max_open_orders: u32,
 }
 
-impl BackTest {
-    pub fn new(strategy_name: &str) -> Self {
-        Self {
-            strategy_name: strategy_name.to_string(),
-            signals: vec![],
-            balance: 10_000.0,
-            positions: 0,
-            buy_count: 0,
-            sell_count: 0,
-        }
-    }
-    pub fn add_signal(&mut self, signal: SignalMessage) {
-        self.signals.push(signal)
-    }
-
-    pub fn calculate_strategy_profit_loss(&mut self) {
-        let mut last_price: f64 = 0.0;
-        for signal in &self.signals {
-            match signal.order_side {
-                OrderSide::Buy => {
-                    self.positions += 1;
-                    self.balance -= signal.price;
-                    self.buy_count += 1
-                }
-                OrderSide::Sell => {
-                    self.positions -= 1;
-                    self.balance += signal.price;
-                    self.sell_count += 1
-                }
-            }
-            last_price = signal.price;
-        }
-
-        if self.positions.is_negative() {
-            self.balance -= last_price * self.positions.abs() as f64;
-        } else {
-            self.balance += last_price * self.positions.abs() as f64;
-        }
+impl Default for StrategySettings {
+    fn default() -> Self {
+        Self { max_open_orders: 1 }
     }
 }

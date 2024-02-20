@@ -31,6 +31,7 @@ pub trait ExchangeApi: Send + Sync {
     // Account methods
     // ---
     async fn get_account(&self) -> ApiResult<Value>;
+    async fn get_account_balance(&self) -> ApiResult<f64>;
     async fn open_position(&self, symbol: &str, side: OrderSide, quantity: f64)
         -> ApiResult<Value>;
     async fn close_position(&self, position_id: &str) -> ApiResult<Value>;
