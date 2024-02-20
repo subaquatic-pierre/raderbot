@@ -69,7 +69,7 @@ async fn list_positions(app_data: web::Data<AppState>, _req: HttpRequest) -> imp
     let account = app_data.get_account().await;
     let mut positions = vec![];
 
-    for position in account.lock().await.open_positions().await {
+    for position in account.lock().await.open_positions() {
         positions.push(position.clone())
     }
 

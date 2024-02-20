@@ -97,9 +97,12 @@ pub fn calculate_kline_open_time(close_time: u64, interval: &str) -> u64 {
     (close_time + 1) - (interval_seconds * 1000)
 }
 
-pub fn build_interval(interval: &str) -> Option<Duration> {
+pub fn build_interval(interval: &str) -> Result<Duration, &'static str> {
     match interval {
-        "1m" => Some(Duration::from_secs(60)),
-        _ => None,
+        "1m" => Ok(Duration::from_secs(60)),
+        "5m" => Ok(Duration::from_secs(300)),
+        "15m" => Ok(Duration::from_secs(900)),
+        "1h" => Ok(Duration::from_secs(3600)),
+        _ => Err("Unsupported interval"),
     }
 }

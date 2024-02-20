@@ -13,6 +13,7 @@ pub struct SignalMessage {
     pub symbol: String,
     pub price: f64,
     pub is_back_test: bool,
+    pub timestamp: u64,
 }
 
 pub enum AlgorithmEvalResult {
@@ -25,6 +26,7 @@ pub enum AlgorithmEvalResult {
 pub enum AlgorithmError {
     UnkownName(String),
     UnknownInterval(String),
+    InvalidParams(String),
 }
 
 impl fmt::Display for AlgorithmError {
@@ -32,6 +34,7 @@ impl fmt::Display for AlgorithmError {
         match self {
             AlgorithmError::UnkownName(msg) => write!(f, "Unknown Name error: {}", msg),
             AlgorithmError::UnknownInterval(msg) => write!(f, "Unknown Interval error: {}", msg),
+            AlgorithmError::InvalidParams(msg) => write!(f, "Invalid Params error: {}", msg),
         }
     }
 }

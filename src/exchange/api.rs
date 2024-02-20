@@ -44,34 +44,6 @@ pub trait ExchangeApi: Send + Sync {
     async fn all_orders(&self) -> ApiResult<Value>;
     async fn list_open_orders(&self) -> ApiResult<Value>;
 
-    // ---
-    // Stream Methods
-    // ---
-    async fn open_stream(
-        &self,
-        stream_type: StreamType,
-        symbol: &str,
-        interval: Option<&str>,
-    ) -> ApiResult<String> {
-        let url = self.build_stream_url(symbol, stream_type.clone(), interval);
-        let stream_id = build_stream_id(symbol, interval);
-
-        let interval = interval.map(|s| s.to_owned());
-
-        // create new StreamMeta
-        let open_stream_meta =
-            StreamMeta::new(&stream_id, &url, symbol, stream_type.clone(), interval);
-
-        let stream_manager = self.get_stream_manager();
-        let mut stream_manager = stream_manager.lock().await;
-        stream_manager.open_stream(open_stream_meta).await
-    }
-    async fn close_stream(&self, stream_id: &str) -> Option<StreamMeta> {
-        let stream_manager = self.get_stream_manager();
-        let mut stream_manager = stream_manager.lock().await;
-        stream_manager.close_stream(stream_id).await
-    }
-
     fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>>;
 
     async fn active_streams(&self) -> Vec<StreamMeta> {
@@ -80,27 +52,12 @@ pub trait ExchangeApi: Send + Sync {
         stream_manager.active_streams().await
     }
 
-    // --
+    // ---
     // Exchange Methods
     // ---
     async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline>;
     async fn get_ticker(&self, symbol: &str) -> ApiResult<Ticker>;
     async fn exchange_info(&self) -> ApiResult<Value>;
-
-    // ---
-    // HTTP Methods
-    // ---
-    // async fn get(
-    //     &self,
-    //     endpoint: &str,
-    //     query_str: Option<&str>,
-    // ) -> Result<Response, reqwest::Error>;
-    // async fn post(&self, endpoint: &str, query_str: &str) -> Result<Response, reqwest::Error>;
-
-    // ---
-    // API Util methods
-    // ---
-    // async fn handle_response(&self, response: Response) -> ApiResult<Value>;
 
     fn build_stream_url(
         &self,
@@ -108,7 +65,6 @@ pub trait ExchangeApi: Send + Sync {
         stream_type: StreamType,
         interval: Option<&str>,
     ) -> String;
-    // fn sign_query_str(&self, query_str: &str) -> String;
 }
 
 pub struct QueryStr<'a> {

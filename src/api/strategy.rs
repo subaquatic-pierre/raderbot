@@ -6,15 +6,19 @@ use actix_web::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::bot::AppState;
+use crate::strategy::strategy::StrategySettings;
 
 #[derive(Debug, Deserialize)]
 pub struct NewStrategyParams {
     symbol: String,
     strategy_name: String,
+    algorithm_params: Value,
     interval: String,
+    margin: Option<f64>,
+    leverage: Option<u32>,
 }
 #[post("/new-strategy")]
 async fn new_strategy(
@@ -23,10 +27,22 @@ async fn new_strategy(
 ) -> impl Responder {
     let bot = app_data.bot.clone();
 
+    let settings = StrategySettings {
+        max_open_orders: 2,
+        margin_usd: body.margin.unwrap_or_else(|| 1000.0),
+        leverage: body.leverage.unwrap_or_else(|| 10),
+    };
+
     let strategy_id = bot
         .lock()
         .await
-        .add_strategy(&body.strategy_name, &body.symbol, &body.interval)
+        .add_strategy(
+            &body.strategy_name,
+            &body.symbol,
+            &body.interval,
+            settings,
+            body.algorithm_params.clone(),
+        )
         .await;
 
     match strategy_id {
@@ -90,7 +106,10 @@ async fn stop_all_strategies(app_data: web::Data<AppState>) -> impl Responder {
 pub struct RunBackTestParams {
     symbol: String,
     strategy_name: String,
+    algorithm_params: Value,
     interval: String,
+    margin: Option<f64>,
+    leverage: Option<u32>,
     from_ts: u64,
     to_ts: u64,
 }
@@ -100,6 +119,11 @@ async fn run_back_test(
     body: Json<RunBackTestParams>,
 ) -> impl Responder {
     let bot = app_data.bot.clone();
+    let settings = StrategySettings {
+        max_open_orders: 2,
+        margin_usd: body.margin.unwrap_or_else(|| 1000.0),
+        leverage: body.leverage.unwrap_or_else(|| 10),
+    };
 
     let result = bot
         .lock()
@@ -110,6 +134,8 @@ async fn run_back_test(
             &body.interval,
             body.from_ts,
             body.to_ts,
+            settings,
+            body.algorithm_params.clone(),
         )
         .await;
 

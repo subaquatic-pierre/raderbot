@@ -1,1 +1,1 @@
-pub mod moving_average;
+pub mod ma_crossover;

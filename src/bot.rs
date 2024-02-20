@@ -1,6 +1,7 @@
 use actix_web::web::Data;
 use dotenv_codegen::dotenv;
 use log::{info, warn};
+use serde_json::Value;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -56,11 +57,17 @@ impl RaderBot {
         let storage_manager = StorageManager::default();
 
         // create new market to hold market data
-        let market = Market::new(market_rx.clone(), exchange_api.clone(), storage_manager).await;
+        let market = Market::new(
+            market_rx.clone(),
+            exchange_api.clone(),
+            storage_manager,
+            true,
+        )
+        .await;
 
         let market = ArcMutex::new(market);
 
-        let account = Account::new(market.clone(), exchange_api.clone()).await;
+        let account = Account::new(market.clone(), exchange_api.clone(), true).await;
 
         let account = ArcMutex::new(account);
 
@@ -89,6 +96,8 @@ impl RaderBot {
         strategy_name: &str,
         symbol: &str,
         interval: &str,
+        settings: StrategySettings,
+        algorithm_params: Value,
     ) -> Result<u32, AlgorithmError> {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
@@ -100,6 +109,7 @@ impl RaderBot {
             strategy_tx,
             market,
             StrategySettings::default(),
+            algorithm_params,
         )?;
 
         let handle = strategy.start().await;
@@ -147,6 +157,8 @@ impl RaderBot {
         interval: &str,
         from_ts: u64,
         to_ts: u64,
+        settings: StrategySettings,
+        algorithm_params: Value,
     ) -> Result<StrategyResult, AlgorithmError> {
         let strategy_tx = self.strategy_tx.clone();
         let strategy = Strategy::new(
@@ -155,7 +167,8 @@ impl RaderBot {
             interval,
             strategy_tx,
             self.market.clone(),
-            StrategySettings::default(),
+            settings,
+            algorithm_params,
         )?;
 
         // TODO: Get initial_balance from params

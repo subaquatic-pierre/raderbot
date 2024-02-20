@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::task::JoinHandle;
 use tokio::time;
 
+use crate::account::trade::TradeTx;
 use crate::utils::number::generate_random_id;
 use crate::{
     account::trade::OrderSide,
@@ -35,8 +37,10 @@ impl Strategy {
         strategy_tx: ArcSender<SignalMessage>,
         market: ArcMutex<Market>,
         settings: StrategySettings,
+        algorithm_params: Value,
     ) -> Result<Self, AlgorithmError> {
-        let algorithm = AlgorithmBuilder::build_algorithm(strategy_name, interval)?;
+        let algorithm =
+            AlgorithmBuilder::build_algorithm(strategy_name, interval, algorithm_params)?;
 
         Ok(Self {
             id: generate_random_id(),
@@ -80,6 +84,7 @@ impl Strategy {
                         symbol: symbol.clone(),
                         price: kline.close,
                         is_back_test: false,
+                        timestamp: kline.close_time,
                     };
 
                     if strategy_tx.is_closed() {
@@ -120,8 +125,16 @@ impl Default for StrategySettings {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StrategyResult {
-    pub balance: f64,
-    pub positions: i32,
-    pub buy_count: u32,
-    pub sell_count: u32,
+    pub profit: f64,
+    pub trade_txs: Vec<TradeTx>,
+    // pub signals: Vec<SignalMessage>,
+    pub buy_count: usize,
+    pub sell_count: usize,
+    pub buy_signal_count: usize,
+    pub sell_signal_count: usize,
+    pub period_start_price: f64,
+    pub period_end_price: f64,
+    pub symbol: String,
+    pub max_drawdown: f64,
+    pub max_profit: f64,
 }

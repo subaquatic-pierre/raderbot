@@ -1,3 +1,4 @@
+use env_logger::init;
 use futures::StreamExt;
 
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,7 @@ impl Market {
         market_receiver: ArcReceiver<MarketMessage>,
         exchange_api: Arc<Box<dyn ExchangeApi>>,
         storage_manager: StorageManager,
+        init_workers: bool,
     ) -> Self {
         let mut _self = Self {
             data: ArcMutex::new(MarketData::new(storage_manager)),
@@ -52,7 +54,9 @@ impl Market {
             needed_streams: ArcMutex::new(vec![]),
         };
 
-        _self.init().await;
+        if init_workers {
+            _self.init().await;
+        }
 
         _self
     }
@@ -120,13 +124,31 @@ impl Market {
         symbol: &str,
         interval: Option<&str>,
     ) -> ApiResult<String> {
+        let url = self
+            .exchange_api
+            .build_stream_url(symbol, stream_type.clone(), interval);
+        let stream_id = build_stream_id(symbol, interval);
+
+        let interval = interval.map(|s| s.to_owned());
+
+        // create new StreamMeta
+        let open_stream_meta =
+            StreamMeta::new(&stream_id, &url, symbol, stream_type.clone(), interval);
         self.exchange_api
-            .open_stream(stream_type, symbol, interval)
+            .get_stream_manager()
+            .lock()
+            .await
+            .open_stream(open_stream_meta)
             .await
     }
 
     pub async fn close_stream(&self, stream_id: &str) -> Option<StreamMeta> {
-        self.exchange_api.close_stream(stream_id).await
+        self.exchange_api
+            .get_stream_manager()
+            .lock()
+            .await
+            .close_stream(stream_id)
+            .await
     }
 
     // ---
@@ -187,11 +209,10 @@ impl Market {
                             let need_stream = needed_stream_meta.clone();
 
                             let _ = exchange_api
-                                .open_stream(
-                                    needed_stream_meta.stream_type.clone(),
-                                    &needed_stream_meta.symbol,
-                                    need_stream.interval.as_deref(),
-                                )
+                                .get_stream_manager()
+                                .lock()
+                                .await
+                                .open_stream(need_stream)
                                 .await;
                         }
                     }

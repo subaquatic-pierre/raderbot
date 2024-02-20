@@ -1,10 +1,11 @@
 use std::time::Duration;
 
 use log::warn;
+use serde_json::Value;
 
 use crate::{
     account::trade::OrderSide,
-    algorithm::moving_average::MovingAverage,
+    algorithm::ma_crossover::MovingAverageCrossover,
     market::{
         kline::{Kline, KlineData},
         ticker::TickerData,
@@ -27,17 +28,17 @@ impl AlgorithmBuilder {
     pub fn build_algorithm(
         algorithm_name: &str,
         interval: &str,
+        algorithm_params: Value,
     ) -> Result<Box<dyn Algorithm>, AlgorithmError> {
         let interval = match build_interval(interval) {
-            Some(interval) => interval,
-            None => {
-                return Err(AlgorithmError::UnknownInterval(
-                    format!("Interval {interval} is incorrect").to_string(),
-                ))
-            }
+            Ok(interval) => interval,
+            Err(e) => return Err(AlgorithmError::UnknownInterval(e.to_string())),
         };
         match algorithm_name {
-            "MovingAverage" => Ok(Box::new(MovingAverage::new(interval))),
+            "MovingAverageCrossover" => {
+                let algo = MovingAverageCrossover::new(interval, algorithm_params)?;
+                Ok(Box::new(algo))
+            }
             _ => Err(AlgorithmError::UnkownName(
                 format!("Strategy name {algorithm_name} is incorrect").to_string(),
             )),

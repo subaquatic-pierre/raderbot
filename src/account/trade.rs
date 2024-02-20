@@ -66,9 +66,12 @@ impl Position {
     pub fn set_stop_loss(&mut self, stop_loss: Option<f64>) {
         self.stop_loss = stop_loss
     }
+    pub fn set_strategy_id(&mut self, strategy_id: Option<StrategyId>) {
+        self.strategy_id = strategy_id
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TradeTx {
     pub id: Uuid,
     pub close_time: u64,

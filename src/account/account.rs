@@ -19,20 +19,26 @@ use super::trade::{PositionId, TradeTx};
 pub struct Account {
     market: ArcMutex<Market>,
     positions: HashMap<PositionId, Position>,
-    trade_txs: HashMap<Uuid, TradeTx>,
+    trade_txs: Vec<TradeTx>,
     exchange_api: Arc<Box<dyn ExchangeApi>>,
 }
 
 impl Account {
-    pub async fn new(market: ArcMutex<Market>, exchange_api: Arc<Box<dyn ExchangeApi>>) -> Self {
+    pub async fn new(
+        market: ArcMutex<Market>,
+        exchange_api: Arc<Box<dyn ExchangeApi>>,
+        init_workers: bool,
+    ) -> Self {
         let _self = Self {
             market,
             exchange_api,
             positions: HashMap::new(),
-            trade_txs: HashMap::new(),
+            trade_txs: vec![],
         };
 
-        // _self.init(init_listeners).await;
+        if init_workers {
+            _self.init().await;
+        }
         _self
     }
 
@@ -44,7 +50,7 @@ impl Account {
         order_side: OrderSide,
         stop_loss: Option<f64>,
         open_price: f64,
-    ) -> Option<&Position> {
+    ) -> Option<&mut Position> {
         if let Ok(mut position) = self
             .exchange_api
             .open_position(symbol, margin_usd, leverage, order_side, open_price)
@@ -55,7 +61,7 @@ impl Account {
             // insert new position into account positions
             self.positions.insert(position.id, position);
 
-            return self.positions.get(&position_id);
+            return self.positions.get_mut(&position_id);
         };
 
         None
@@ -76,24 +82,26 @@ impl Account {
 
                 let trade_tx_id = trade_tx.id;
 
-                self.trade_txs.insert(trade_tx_id, trade_tx);
+                self.trade_txs.push(trade_tx);
 
-                return self.trade_txs.get(&trade_tx_id);
+                if let Some(tx) = self.trade_txs.iter().find(|e| e.id == trade_tx_id) {
+                    return Some(tx);
+                }
             };
         };
 
         None
     }
 
-    pub async fn open_positions(&self) -> Values<'_, PositionId, Position> {
+    pub fn open_positions(&self) -> Values<'_, PositionId, Position> {
         self.positions.values()
     }
 
-    pub async fn trade_txs(&self) -> Values<'_, Uuid, TradeTx> {
-        self.trade_txs.values()
+    pub fn trade_txs(&self) -> Vec<TradeTx> {
+        self.trade_txs.clone()
     }
 
-    pub async fn strategy_open_positions(&self, strategy_id: StrategyId) -> Vec<Position> {
+    pub fn strategy_open_positions(&self, strategy_id: StrategyId) -> Vec<Position> {
         let mut positions = vec![];
         for pos in self.positions.values() {
             if let Some(pos_strategy_id) = pos.strategy_id {
@@ -109,12 +117,10 @@ impl Account {
     // Private Methods
     // ---
 
-    // async fn init(&self, init_listeners: bool) {
-    //     // monitor positions stop loss
-    //     if init_listeners {
-    //         self.init_stop_loss_monitor().await
-    //     }
-    // }
+    async fn init(&self) {
+        // monitor positions stop loss
+        // self.init_stop_loss_monitor().await
+    }
 
     // async fn init_stop_loss_monitor(&self) {
     //     let market = self.market.clone();

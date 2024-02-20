@@ -1,12 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use log::info;
 
 use crate::{
-    account::{
-        account::Account,
-        trade::{OrderSide, Position},
-    },
+    account::account::Account,
     market::{market::Market, types::ArcMutex},
 };
 
@@ -35,8 +32,7 @@ impl SignalManager {
             .account
             .lock()
             .await
-            .strategy_open_positions(signal.strategy_id)
-            .await;
+            .strategy_open_positions(signal.strategy_id);
 
         // get trigger price used in all account actions
         // from market or signal if signal.is_back_test
@@ -73,15 +69,13 @@ impl SignalManager {
                             .await;
                     }
                 }
-            }
 
             // if is same signal as last position and settings allow more than one
             // open position
-            if signal.order_side == last.order_side
-                && active_positions.len() < settings.max_open_orders as usize
-            {
+            } else if active_positions.len() < settings.max_open_orders as usize {
                 if let Some(close_price) = trigger_price {
-                    self.account
+                    if let Some(position) = self
+                        .account
                         .lock()
                         .await
                         .open_position(
@@ -92,13 +86,18 @@ impl SignalManager {
                             None,
                             close_price,
                         )
-                        .await;
+                        .await
+                    {
+                        position.set_strategy_id(Some(signal.strategy_id))
+                    };
                 }
             }
+
+        // no open positions yet for given strategy
         } else {
-            // no open positions yet for given strategy
             if let Some(last_price) = trigger_price {
-                self.account
+                if let Some(position) = self
+                    .account
                     .lock()
                     .await
                     .open_position(
@@ -109,11 +108,12 @@ impl SignalManager {
                         None,
                         last_price,
                     )
-                    .await;
+                    .await
+                {
+                    position.set_strategy_id(Some(signal.strategy_id))
+                };
             }
         }
-
-        info!("{signal:?}");
     }
 
     pub fn add_strategy_settings(&mut self, strategy_id: u32, settings: StrategySettings) {
