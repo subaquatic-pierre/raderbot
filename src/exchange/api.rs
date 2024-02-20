@@ -5,12 +5,12 @@ use serde_json::Value;
 use std::{error::Error, fmt};
 
 use crate::{
-    account::trade::OrderSide,
+    account::trade::{OrderSide, Position, TradeTx},
     market::{kline::Kline, ticker::Ticker, types::ArcMutex},
 };
 
 use super::{
-    stream::{StreamManager, StreamMeta},
+    stream::{build_stream_id, StreamManager, StreamMeta},
     types::{ApiResult, StreamType},
 };
 
@@ -32,9 +32,14 @@ pub trait ExchangeApi: Send + Sync {
     // ---
     async fn get_account(&self) -> ApiResult<Value>;
     async fn get_account_balance(&self) -> ApiResult<f64>;
-    async fn open_position(&self, symbol: &str, side: OrderSide, quantity: f64)
-        -> ApiResult<Value>;
-    async fn close_position(&self, position_id: &str) -> ApiResult<Value>;
+    async fn open_position(
+        &self,
+        symbol: &str,
+        side: OrderSide,
+        quantity: f64,
+        open_price: f64,
+    ) -> ApiResult<Position>;
+    async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx>;
     async fn all_orders(&self) -> ApiResult<Value>;
     async fn list_open_orders(&self) -> ApiResult<Value>;
 
@@ -46,8 +51,25 @@ pub trait ExchangeApi: Send + Sync {
         stream_type: StreamType,
         symbol: &str,
         interval: Option<&str>,
-    ) -> ApiResult<String>;
-    async fn close_stream(&self, stream_id: &str) -> Option<StreamMeta>;
+    ) -> ApiResult<String> {
+        let url = self.build_stream_url(symbol, stream_type.clone(), interval);
+        let stream_id = build_stream_id(symbol, interval);
+
+        let interval = interval.map(|s| s.to_owned());
+
+        // create new StreamMeta
+        let open_stream_meta =
+            StreamMeta::new(&stream_id, &url, symbol, stream_type.clone(), interval);
+
+        let stream_manager = self.get_stream_manager();
+        let mut stream_manager = stream_manager.lock().await;
+        stream_manager.open_stream(open_stream_meta).await
+    }
+    async fn close_stream(&self, stream_id: &str) -> Option<StreamMeta> {
+        let stream_manager = self.get_stream_manager();
+        let mut stream_manager = stream_manager.lock().await;
+        stream_manager.close_stream(stream_id).await
+    }
 
     fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>>;
 
@@ -67,26 +89,25 @@ pub trait ExchangeApi: Send + Sync {
     // ---
     // HTTP Methods
     // ---
-    async fn get(
-        &self,
-        endpoint: &str,
-        query_str: Option<&str>,
-    ) -> Result<Response, reqwest::Error>;
-    async fn post(&self, endpoint: &str, query_str: &str) -> Result<Response, reqwest::Error>;
+    // async fn get(
+    //     &self,
+    //     endpoint: &str,
+    //     query_str: Option<&str>,
+    // ) -> Result<Response, reqwest::Error>;
+    // async fn post(&self, endpoint: &str, query_str: &str) -> Result<Response, reqwest::Error>;
 
     // ---
     // API Util methods
     // ---
-    async fn handle_response(&self, response: Response) -> ApiResult<Value>;
+    // async fn handle_response(&self, response: Response) -> ApiResult<Value>;
 
-    fn build_headers(&self, json: bool) -> HeaderMap;
     fn build_stream_url(
         &self,
         symbol: &str,
         stream_type: StreamType,
         interval: Option<&str>,
     ) -> String;
-    fn sign_query_str(&self, query_str: &str) -> String;
+    // fn sign_query_str(&self, query_str: &str) -> String;
 }
 
 pub struct QueryStr<'a> {

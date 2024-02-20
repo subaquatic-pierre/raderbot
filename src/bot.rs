@@ -14,9 +14,9 @@ use crate::{
     },
     storage::manager::StorageManager,
     strategy::{
-        backer::{BackTest, BackTestResult},
+        backer::BackTest,
         signal::SignalManager,
-        strategy::{Strategy, StrategySettings},
+        strategy::{Strategy, StrategyId, StrategyResult, StrategySettings},
         types::{AlgorithmError, SignalMessage},
     },
     utils::channel::build_arc_channel,
@@ -31,8 +31,8 @@ pub struct RaderBot {
     pub account: ArcMutex<Account>,
     pub exchange_api: Arc<Box<dyn ExchangeApi>>,
     signal_manager: ArcMutex<SignalManager>,
-    strategy_handles: HashMap<u32, JoinHandle<()>>,
-    strategies: HashMap<u32, Strategy>,
+    strategy_handles: HashMap<StrategyId, JoinHandle<()>>,
+    strategies: HashMap<StrategyId, Strategy>,
     strategy_rx: ArcReceiver<SignalMessage>,
     strategy_tx: ArcSender<SignalMessage>,
 }
@@ -60,13 +60,13 @@ impl RaderBot {
 
         let market = ArcMutex::new(market);
 
-        let account = Account::new(market.clone(), exchange_api.clone(), false).await;
+        let account = Account::new(market.clone(), exchange_api.clone()).await;
 
         let account = ArcMutex::new(account);
 
         let (strategy_tx, strategy_rx) = build_arc_channel::<SignalMessage>();
 
-        let signal_manager = ArcMutex::new(SignalManager::new(account.clone()));
+        let signal_manager = ArcMutex::new(SignalManager::new(account.clone(), market.clone()));
 
         let mut _self = Self {
             market,
@@ -147,7 +147,7 @@ impl RaderBot {
         interval: &str,
         from_ts: u64,
         to_ts: u64,
-    ) -> Result<BackTestResult, AlgorithmError> {
+    ) -> Result<StrategyResult, AlgorithmError> {
         let strategy_tx = self.strategy_tx.clone();
         let strategy = Strategy::new(
             strategy_name,
@@ -158,7 +158,9 @@ impl RaderBot {
             StrategySettings::default(),
         )?;
 
-        let mut back_test = BackTest::new(strategy).await;
+        // TODO: Get initial_balance from params
+        let initial_balance = Some(10_000.0);
+        let mut back_test = BackTest::new(strategy, initial_balance).await;
 
         if let Some(kline_data) = self
             .market
@@ -171,7 +173,7 @@ impl RaderBot {
             back_test.run(kline_data).await;
         };
 
-        Ok(back_test.result())
+        Ok(back_test.result().await)
     }
 
     // ---

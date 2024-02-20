@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use tokio::time;
 
-use crate::market::kline::KlineData;
 use crate::utils::number::generate_random_id;
 use crate::{
     account::trade::OrderSide,
@@ -16,8 +15,10 @@ use crate::{
 use super::algorithm::AlgorithmBuilder;
 use super::types::{AlgorithmError, AlgorithmEvalResult, SignalMessage};
 
+pub type StrategyId = u32;
+
 pub struct Strategy {
-    pub id: u32,
+    pub id: StrategyId,
     pub symbol: String,
     interval: String,
     market: ArcMutex<Market>,
@@ -74,10 +75,11 @@ impl Strategy {
                     };
 
                     let signal = SignalMessage {
-                        strategy_id: id.to_string(),
+                        strategy_id: id,
                         order_side,
                         symbol: symbol.clone(),
                         price: kline.close,
+                        is_back_test: false,
                     };
 
                     if strategy_tx.is_closed() {
@@ -102,10 +104,24 @@ impl Strategy {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StrategySettings {
     pub max_open_orders: u32,
+    pub margin_usd: f64,
+    pub leverage: u32,
 }
 
 impl Default for StrategySettings {
     fn default() -> Self {
-        Self { max_open_orders: 1 }
+        Self {
+            max_open_orders: 1,
+            margin_usd: 100.0,
+            leverage: 1,
+        }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StrategyResult {
+    pub balance: f64,
+    pub positions: i32,
+    pub buy_count: u32,
+    pub sell_count: u32,
 }

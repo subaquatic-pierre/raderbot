@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::market::kline::Kline;
 
-use super::{algorithm::Algorithm, types::AlgorithmEvalResult};
+use crate::strategy::{algorithm::Algorithm, types::AlgorithmEvalResult};
 
 pub struct MovingAverage {
     data_points: Vec<Kline>,

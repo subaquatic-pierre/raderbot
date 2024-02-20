@@ -4,6 +4,7 @@ use log::warn;
 
 use crate::{
     account::trade::OrderSide,
+    algorithm::moving_average::MovingAverage,
     market::{
         kline::{Kline, KlineData},
         ticker::TickerData,
@@ -11,10 +12,7 @@ use crate::{
     utils::time::build_interval,
 };
 
-use super::{
-    moving_average::MovingAverage,
-    types::{AlgorithmError, AlgorithmEvalResult},
-};
+use super::types::{AlgorithmError, AlgorithmEvalResult};
 
 pub trait Algorithm: Send + Sync {
     fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult;

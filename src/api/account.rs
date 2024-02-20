@@ -36,22 +36,28 @@ pub struct OpenPosParams {
 #[post("/open-position")]
 async fn open_position(app_data: web::Data<AppState>, body: Json<OpenPosParams>) -> impl Responder {
     let account = app_data.get_account().await;
+    let market = app_data.get_market().await;
+    let market = market.lock().await;
+    let mut account = account.lock().await;
+    if let Some(last_price) = market.last_price(&body.symbol).await {
+        let res = account
+            .open_position(
+                &body.symbol,
+                body.margin,
+                body.leverage,
+                body.order_side.clone(),
+                body.stop_loss,
+                last_price,
+            )
+            .await;
 
-    let res = account
-        .lock()
-        .await
-        .open_position(
-            &body.symbol,
-            body.margin,
-            body.leverage,
-            body.order_side.clone(),
-            body.stop_loss,
-        )
-        .await;
-
-    if let Some(res) = res {
-        let json_data = json!({ "success": "Position Opened","data":res });
-        HttpResponse::Ok().json(json_data)
+        if let Some(res) = res {
+            let json_data = json!({ "success": "Position Opened","data":res });
+            HttpResponse::Ok().json(json_data)
+        } else {
+            let json_data = json!({ "error": "Unable to open position" });
+            HttpResponse::ExpectationFailed().json(json_data)
+        }
     } else {
         let json_data = json!({ "error": "Unable to open position" });
         HttpResponse::ExpectationFailed().json(json_data)
@@ -61,7 +67,11 @@ async fn open_position(app_data: web::Data<AppState>, body: Json<OpenPosParams>)
 #[get("/list-positions")]
 async fn list_positions(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
     let account = app_data.get_account().await;
-    let positions = account.lock().await.positions().await;
+    let mut positions = vec![];
+
+    for position in account.lock().await.open_positions().await {
+        positions.push(position.clone())
+    }
 
     let json_data = json!({ "positions": positions });
 

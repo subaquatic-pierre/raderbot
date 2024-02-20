@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
-use crate::account::trade::OrderSide;
+use crate::account::trade::{OrderSide, Position, PositionId, TradeTx};
 use crate::exchange::api::{ExchangeApi, QueryStr};
 
 use crate::market::messages::MarketMessage;
@@ -75,151 +75,22 @@ impl BingXApi {
         // build kline from hashmap
         Ticker::from_bingx_lookup(lookup)
     }
-}
 
-#[async_trait]
-impl ExchangeApi for BingXApi {
-    async fn get_account_balance(&self) -> ApiResult<f64> {
-        unimplemented!()
+    fn build_headers(&self, json: bool) -> HeaderMap {
+        let mut custom_headers = HeaderMap::new();
+
+        // custom_headers.insert(USER_AGENT, HeaderValue::from_static("binance-rs"));
+        if json {
+            custom_headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        }
+        custom_headers.insert(
+            "X-MBX-APIKEY",
+            HeaderValue::from_str(self.api_key.as_str()).expect("Unable to get API key"),
+        );
+
+        custom_headers
     }
 
-    // TODO: Remove methods from trait
-    async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline> {
-        get_bingx_kline(symbol, interval).await
-    }
-
-    async fn get_ticker(&self, symbol: &str) -> ApiResult<Ticker> {
-        get_bingx_ticker(symbol).await
-    }
-
-    async fn open_position(
-        &self,
-        symbol: &str,
-        side: OrderSide,
-        quantity: f64,
-    ) -> ApiResult<Value> {
-        let endpoint = "/api/v3/order";
-
-        // format qty to 8 decimals
-        let _qty = format!("{:.1$}", quantity, 8);
-
-        let ts = &generate_ts().to_string();
-        let side = &side.to_string();
-        let quote_qty = 50.to_string();
-
-        let request_body = QueryStr::new(vec![
-            ("symbol", symbol),
-            ("quoteOrderQty", &quote_qty),
-            // ("quantity", &qty),
-            ("type", "MARKET"),
-            ("side", side),
-            ("timestamp", ts),
-        ]);
-
-        let signature = self.sign_query_str(&request_body.to_string());
-
-        let query_str = format!("{}&signature={signature}", request_body.to_string());
-
-        let res = self.post(endpoint, &query_str).await?;
-
-        self.handle_response(res).await
-    }
-
-    async fn close_position(&self, _position_id: &str) -> ApiResult<Value> {
-        Ok(json!({"ok":"ok"}))
-    }
-
-    async fn get_account(&self) -> ApiResult<Value> {
-        let endpoint = "/api/v3/account";
-        let ts = generate_ts();
-
-        let query_str = format!("timestamp={ts}");
-        let signature = self.sign_query_str(&query_str);
-        let query_str = format!("{}&signature={signature}", query_str);
-
-        let res = self.get(endpoint, Some(&query_str)).await?;
-
-        self.handle_response(res).await
-    }
-
-    async fn all_orders(&self) -> ApiResult<Value> {
-        let endpoint = "/api/v3/allOrderList";
-        let ts = generate_ts();
-
-        let query_str = format!("timestamp={ts}");
-        let signature = self.sign_query_str(&query_str);
-        let query_str = format!("{}&signature={signature}", query_str);
-
-        let res = self.get(endpoint, Some(&query_str)).await?;
-
-        self.handle_response(res).await
-    }
-
-    async fn list_open_orders(&self) -> ApiResult<Value> {
-        let endpoint = "/api/v3/openOrderList";
-        let ts = generate_ts();
-
-        let query_str = format!("timestamp={ts}");
-        let signature = self.sign_query_str(&query_str);
-        let query_str = format!("{}&signature={signature}", query_str);
-
-        let res = self.get(endpoint, Some(&query_str)).await?;
-
-        self.handle_response(res).await
-    }
-
-    // ---
-    // Stream Methods
-    // ---
-    async fn open_stream(
-        &self,
-        stream_type: StreamType,
-        symbol: &str,
-        interval: Option<&str>,
-    ) -> ApiResult<String> {
-        let url = self.build_stream_url(symbol, stream_type.clone(), interval);
-        let stream_id = build_stream_id(symbol, interval);
-
-        let interval = interval.map(|s| s.to_owned());
-
-        // create new StreamMeta
-        let open_stream_meta =
-            StreamMeta::new(&stream_id, &url, symbol, stream_type.clone(), interval);
-
-        self.stream_manager
-            .lock()
-            .await
-            .open_stream(open_stream_meta)
-            .await
-    }
-
-    async fn close_stream(&self, stream_id: &str) -> Option<StreamMeta> {
-        self.stream_manager
-            .clone()
-            .lock()
-            .await
-            .close_stream(stream_id)
-            .await
-    }
-
-    fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>> {
-        self.stream_manager.clone()
-    }
-
-    // ---
-    // Exchange Methods
-    // ---
-    async fn exchange_info(&self) -> ApiResult<Value> {
-        let endpoint = "/api/v3/exchangeInfo";
-
-        let res = self.get(endpoint, None).await?;
-
-        self.handle_response(res).await
-    }
-
-    // ---
-    // API Util methods
-    // ---
     async fn get(
         &self,
         endpoint: &str,
@@ -265,21 +136,6 @@ impl ExchangeApi for BingXApi {
         Ok(data)
     }
 
-    fn build_headers(&self, json: bool) -> HeaderMap {
-        let mut custom_headers = HeaderMap::new();
-
-        // custom_headers.insert(USER_AGENT, HeaderValue::from_static("binance-rs"));
-        if json {
-            custom_headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        }
-        custom_headers.insert(
-            "X-MBX-APIKEY",
-            HeaderValue::from_str(self.api_key.as_str()).expect("Unable to get API key"),
-        );
-
-        custom_headers
-    }
-
     fn sign_query_str(&self, query_str: &str) -> String {
         // Create a new HMAC instance with SHA256
         let mut hmac =
@@ -293,6 +149,126 @@ impl ExchangeApi for BingXApi {
 
         // Convert the HMAC value to a string
         hex::encode(result.into_bytes())
+    }
+}
+
+#[async_trait]
+impl ExchangeApi for BingXApi {
+    async fn get_account_balance(&self) -> ApiResult<f64> {
+        unimplemented!()
+    }
+
+    async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline> {
+        get_bingx_kline(symbol, interval).await
+    }
+
+    async fn get_ticker(&self, symbol: &str) -> ApiResult<Ticker> {
+        get_bingx_ticker(symbol).await
+    }
+
+    async fn open_position(
+        &self,
+        symbol: &str,
+        order_side: OrderSide,
+        quantity: f64,
+        open_price: f64,
+    ) -> ApiResult<Position> {
+        let endpoint = "/api/v3/order";
+
+        // format qty to 8 decimals
+        let _qty = format!("{:.1$}", quantity, 8);
+
+        let ts = &generate_ts().to_string();
+        let side = &order_side.to_string();
+        let quote_qty = 50.to_string();
+
+        let request_body = QueryStr::new(vec![
+            ("symbol", symbol),
+            ("quoteOrderQty", &quote_qty),
+            // ("quantity", &qty),
+            ("type", "MARKET"),
+            ("side", side),
+            ("timestamp", ts),
+        ]);
+
+        let signature = self.sign_query_str(&request_body.to_string());
+
+        let query_str = format!("{}&signature={signature}", request_body.to_string());
+
+        let res = self.post(endpoint, &query_str).await?;
+
+        match self.handle_response(res).await {
+            Ok(_res) => {
+                // parse response
+                // build position from response
+                Ok(Position::new(symbol, open_price, order_side, None, 0.0, 1))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx> {
+        // TODO: make api request to close position
+        let position = Position::new("SOME", 0.0, OrderSide::Buy, None, 0.0, 1);
+        Ok(TradeTx::new(1.0, 0, position))
+    }
+
+    async fn get_account(&self) -> ApiResult<Value> {
+        let endpoint = "/api/v3/account";
+        let ts = generate_ts();
+
+        let query_str = format!("timestamp={ts}");
+        let signature = self.sign_query_str(&query_str);
+        let query_str = format!("{}&signature={signature}", query_str);
+
+        let res = self.get(endpoint, Some(&query_str)).await?;
+
+        self.handle_response(res).await
+    }
+
+    async fn all_orders(&self) -> ApiResult<Value> {
+        let endpoint = "/api/v3/allOrderList";
+        let ts = generate_ts();
+
+        let query_str = format!("timestamp={ts}");
+        let signature = self.sign_query_str(&query_str);
+        let query_str = format!("{}&signature={signature}", query_str);
+
+        let res = self.get(endpoint, Some(&query_str)).await?;
+
+        self.handle_response(res).await
+    }
+
+    async fn list_open_orders(&self) -> ApiResult<Value> {
+        let endpoint = "/api/v3/openOrderList";
+        let ts = generate_ts();
+
+        let query_str = format!("timestamp={ts}");
+        let signature = self.sign_query_str(&query_str);
+        let query_str = format!("{}&signature={signature}", query_str);
+
+        let res = self.get(endpoint, Some(&query_str)).await?;
+
+        self.handle_response(res).await
+    }
+
+    // ---
+    // Exchange Methods
+    // ---
+    async fn exchange_info(&self) -> ApiResult<Value> {
+        let endpoint = "/api/v3/exchangeInfo";
+
+        let res = self.get(endpoint, None).await?;
+
+        self.handle_response(res).await
+    }
+
+    // ---
+    // Stream Helper methods
+    // ---
+
+    fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>> {
+        self.stream_manager.clone()
     }
 
     fn build_stream_url(

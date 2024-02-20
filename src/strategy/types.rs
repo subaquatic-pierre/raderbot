@@ -4,12 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::account::trade::OrderSide;
 
+use super::strategy::StrategyId;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SignalMessage {
-    pub strategy_id: String,
+    pub strategy_id: StrategyId,
     pub order_side: OrderSide,
     pub symbol: String,
     pub price: f64,
+    pub is_back_test: bool,
 }
 
 pub enum AlgorithmEvalResult {

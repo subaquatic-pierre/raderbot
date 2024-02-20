@@ -15,7 +15,7 @@ use tokio_tungstenite::tungstenite::Message;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
-use crate::account::trade::OrderSide;
+use crate::account::trade::{OrderSide, Position, TradeTx};
 use crate::exchange::api::{ExchangeApi, QueryStr};
 use crate::exchange::types::ArcEsStreamSync;
 use crate::market::messages::MarketMessage;
@@ -71,6 +71,81 @@ impl BinanceApi {
         // build kline from hashmap
         Ticker::from_binance_lookup(lookup)
     }
+
+    fn build_headers(&self, json: bool) -> HeaderMap {
+        let mut custom_headers = HeaderMap::new();
+
+        // custom_headers.insert(USER_AGENT, HeaderValue::from_static("binance-rs"));
+        if json {
+            custom_headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        }
+        custom_headers.insert(
+            "X-MBX-APIKEY",
+            HeaderValue::from_str(self.api_key.as_str()).expect("Unable to get API key"),
+        );
+
+        custom_headers
+    }
+
+    async fn get(
+        &self,
+        endpoint: &str,
+        query_str: Option<&str>,
+    ) -> Result<Response, reqwest::Error> {
+        // let signature = self.sign_query_str(query_str);
+        let url = match query_str {
+            Some(qs) => format!("{}{}?{}", self.host, endpoint, qs),
+            None => format!("{}{}", self.host, endpoint),
+        };
+
+        self.client
+            .get(&url)
+            .headers(self.build_headers(true))
+            .send()
+            .await
+    }
+
+    async fn post(&self, endpoint: &str, query_str: &str) -> Result<Response, reqwest::Error> {
+        let url = format!("{}{}", self.host, endpoint);
+        let body = query_str.to_string();
+
+        self.client
+            .post(&url)
+            .headers(self.build_headers(true))
+            .body(body)
+            .send()
+            .await
+    }
+
+    async fn handle_response(&self, response: Response) -> ApiResult<Value> {
+        let data = match &response.headers().get("content-type") {
+            Some(header) => {
+                if header.to_str().unwrap().contains("text/html") {
+                    json!({"text":response.text().await?})
+                } else {
+                    response.json::<serde_json::Value>().await?
+                }
+            }
+            None => json!({"text":response.text().await?}),
+        };
+
+        Ok(data)
+    }
+
+    fn sign_query_str(&self, query_str: &str) -> String {
+        // Create a new HMAC instance with SHA256
+        let mut hmac =
+            Hmac::<Sha256>::new_from_slice(self.secret_key.as_bytes()).expect("Invalid key length");
+
+        // Update the HMAC with the data
+        hmac.update(query_str.as_bytes());
+
+        // Get the resulting HMAC value
+        let result = hmac.finalize();
+
+        // Convert the HMAC value to a string
+        hex::encode(result.into_bytes())
+    }
 }
 
 #[async_trait]
@@ -79,22 +154,20 @@ impl ExchangeApi for BinanceApi {
         unimplemented!()
     }
 
-    fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>> {
-        self.stream_manager.clone()
-    }
     async fn open_position(
         &self,
         symbol: &str,
-        side: OrderSide,
+        order_side: OrderSide,
         quantity: f64,
-    ) -> ApiResult<Value> {
+        open_price: f64,
+    ) -> ApiResult<Position> {
         let endpoint = "/api/v3/order";
 
         // format qty to 8 decimals
         let _qty = format!("{:.1$}", quantity, 8);
 
         let ts = &generate_ts().to_string();
-        let side = &side.to_string();
+        let side = &order_side.to_string();
         let quote_qty = 50.to_string();
 
         let request_body = QueryStr::new(vec![
@@ -114,11 +187,20 @@ impl ExchangeApi for BinanceApi {
 
         let res = self.post(endpoint, &query_str).await?;
 
-        self.handle_response(res).await
+        match self.handle_response(res).await {
+            Ok(_res) => {
+                // parse response
+                // build position from response
+                Ok(Position::new(symbol, open_price, order_side, None, 0.0, 1))
+            }
+            Err(e) => Err(e),
+        }
     }
 
-    async fn close_position(&self, _position_id: &str) -> ApiResult<Value> {
-        Ok(json!({"ok":"ok"}))
+    async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx> {
+        // TODO: make api request to close position
+        let position = Position::new("SOME", 0.0, OrderSide::Buy, None, 0.0, 1);
+        Ok(TradeTx::new(1.0, 0, position))
     }
 
     async fn get_account(&self) -> ApiResult<Value> {
@@ -195,40 +277,6 @@ impl ExchangeApi for BinanceApi {
     }
 
     // ---
-    // Stream Methods
-    // ---
-    async fn open_stream(
-        &self,
-        stream_type: StreamType,
-        symbol: &str,
-        interval: Option<&str>,
-    ) -> ApiResult<String> {
-        let url = self.build_stream_url(symbol, stream_type.clone(), interval);
-        let stream_id = build_stream_id(symbol, interval);
-
-        let interval = interval.map(|s| s.to_owned());
-
-        // create new StreamMeta
-        let open_stream_meta =
-            StreamMeta::new(&stream_id, &url, symbol, stream_type.clone(), interval);
-
-        self.stream_manager
-            .lock()
-            .await
-            .open_stream(open_stream_meta)
-            .await
-    }
-
-    async fn close_stream(&self, stream_id: &str) -> Option<StreamMeta> {
-        self.stream_manager
-            .clone()
-            .lock()
-            .await
-            .close_stream(stream_id)
-            .await
-    }
-
-    // ---
     // Exchange Methods
     // ---
     async fn exchange_info(&self) -> ApiResult<Value> {
@@ -240,81 +288,11 @@ impl ExchangeApi for BinanceApi {
     }
 
     // ---
-    // API Util methods
+    // Stream Helper methods
     // ---
-    async fn get(
-        &self,
-        endpoint: &str,
-        query_str: Option<&str>,
-    ) -> Result<Response, reqwest::Error> {
-        // let signature = self.sign_query_str(query_str);
-        let url = match query_str {
-            Some(qs) => format!("{}{}?{}", self.host, endpoint, qs),
-            None => format!("{}{}", self.host, endpoint),
-        };
 
-        self.client
-            .get(&url)
-            .headers(self.build_headers(true))
-            .send()
-            .await
-    }
-
-    async fn post(&self, endpoint: &str, query_str: &str) -> Result<Response, reqwest::Error> {
-        let url = format!("{}{}", self.host, endpoint);
-        let body = query_str.to_string();
-
-        self.client
-            .post(&url)
-            .headers(self.build_headers(true))
-            .body(body)
-            .send()
-            .await
-    }
-
-    async fn handle_response(&self, response: Response) -> ApiResult<Value> {
-        let data = match &response.headers().get("content-type") {
-            Some(header) => {
-                if header.to_str().unwrap().contains("text/html") {
-                    json!({"text":response.text().await?})
-                } else {
-                    response.json::<serde_json::Value>().await?
-                }
-            }
-            None => json!({"text":response.text().await?}),
-        };
-
-        Ok(data)
-    }
-
-    fn build_headers(&self, json: bool) -> HeaderMap {
-        let mut custom_headers = HeaderMap::new();
-
-        // custom_headers.insert(USER_AGENT, HeaderValue::from_static("binance-rs"));
-        if json {
-            custom_headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        }
-        custom_headers.insert(
-            "X-MBX-APIKEY",
-            HeaderValue::from_str(self.api_key.as_str()).expect("Unable to get API key"),
-        );
-
-        custom_headers
-    }
-
-    fn sign_query_str(&self, query_str: &str) -> String {
-        // Create a new HMAC instance with SHA256
-        let mut hmac =
-            Hmac::<Sha256>::new_from_slice(self.secret_key.as_bytes()).expect("Invalid key length");
-
-        // Update the HMAC with the data
-        hmac.update(query_str.as_bytes());
-
-        // Get the resulting HMAC value
-        let result = hmac.finalize();
-
-        // Convert the HMAC value to a string
-        hex::encode(result.into_bytes())
+    fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>> {
+        self.stream_manager.clone()
     }
 
     fn build_stream_url(

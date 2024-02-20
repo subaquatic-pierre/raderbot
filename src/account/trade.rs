@@ -2,7 +2,13 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+use crate::{strategy::strategy::StrategyId, utils::time::generate_ts};
+
+use uuid::Uuid;
+
+pub type PositionId = Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
 pub enum OrderSide {
     Buy,
     Sell,
@@ -19,45 +25,59 @@ impl Display for OrderSide {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Position {
+    pub id: PositionId,
     pub symbol: String,
-    pub status: String,
     pub order_side: OrderSide,
-    pub entry_price: f64,
-    pub stop_loss: Option<f64>,
+    pub open_time: u64,
+    pub open_price: f64,
     pub quantity: f64,
-    pub margin: f64,
+    pub margin_usd: f64,
     pub leverage: u32,
-    pub last_price: f64,
-    pub order_id: Option<String>,
+    pub strategy_id: Option<StrategyId>,
+    pub stop_loss: Option<f64>,
 }
 
 impl Position {
     pub fn new(
         symbol: &str,
-        last_price: f64,
+        open_price: f64,
         order_side: OrderSide,
         stop_loss: Option<f64>,
-        margin: f64,
+        margin_usd: f64,
         leverage: u32,
     ) -> Self {
-        let total = margin * leverage as f64;
-        let qty = total / last_price;
+        let total = margin_usd * leverage as f64;
+        let qty = total / open_price;
 
         Self {
+            id: Uuid::new_v4(),
             symbol: symbol.to_string(),
-            status: "open".to_string(),
             order_side,
-            entry_price: last_price,
+            open_price,
             stop_loss,
             quantity: qty,
-            margin,
+            margin_usd,
             leverage,
-            last_price,
-            order_id: None,
+            strategy_id: None,
+            open_time: generate_ts(),
         }
     }
 
-    pub fn _set_id(&mut self, id: &str) {
-        self.order_id = Some(id.to_string());
+    pub fn set_stop_loss(&mut self, stop_loss: Option<f64>) {
+        self.stop_loss = stop_loss
+    }
+
+    pub fn set_strategy_id(&mut self, id: StrategyId) {
+        self.strategy_id = Some(id);
+    }
+}
+
+pub struct TradeTx {
+    pub id: Uuid,
+}
+
+impl TradeTx {
+    pub fn new(close_price: f64, close_time: u64, position: Position) -> Self {
+        Self { id: Uuid::new_v4() }
     }
 }
