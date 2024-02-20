@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -5,7 +6,7 @@ use log::info;
 use serde_json::Value;
 
 use crate::account::account::Account;
-use crate::account::trade::{OrderSide, Position, TradeTx};
+use crate::account::trade::{OrderSide, Position, PositionId, TradeTx};
 use crate::exchange::api::ExchangeApi;
 use crate::exchange::stream::{StreamManager, StreamMeta};
 use crate::exchange::types::{ApiResult, StreamType};
@@ -17,6 +18,7 @@ use crate::market::types::ArcMutex;
 use crate::storage::manager::StorageManager;
 use crate::utils::channel::build_arc_channel;
 use crate::utils::number::generate_random_id;
+use crate::utils::time::generate_ts;
 
 use super::signal::SignalManager;
 use super::strategy::{Strategy, StrategyResult};
@@ -103,7 +105,15 @@ impl BackTest {
 
         info!("All Positions are closed, active_position count: {active_position_count}");
 
-        let all_trades = self.account.lock().await.trade_txs().await;
+        let all_trades: Vec<TradeTx> = self
+            .account
+            .lock()
+            .await
+            .trade_txs()
+            .await
+            .into_iter()
+            .map(|tx| tx.clone())
+            .collect();
 
         StrategyResult {
             balance: 0.0,
@@ -114,21 +124,26 @@ impl BackTest {
     }
 }
 
-pub struct BackTestExchangeApi {}
+pub struct BackTestExchangeApi {
+    // positions: HashMap<PositionId, Position>,
+}
 
 #[async_trait]
 impl ExchangeApi for BackTestExchangeApi {
     async fn open_position(
         &self,
         symbol: &str,
-        side: OrderSide,
-        quantity: f64,
+        margin_usd: f64,
+        leverage: u32,
+        order_side: OrderSide,
         open_price: f64,
     ) -> ApiResult<Position> {
-        unimplemented!()
+        let position = Position::new(symbol, open_price, order_side, margin_usd, leverage, None);
+        Ok(position)
     }
     async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx> {
-        unimplemented!()
+        let trade_tx = TradeTx::new(close_price, generate_ts(), position);
+        Ok(trade_tx)
     }
 
     // ---

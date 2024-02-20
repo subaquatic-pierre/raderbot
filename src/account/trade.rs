@@ -42,9 +42,9 @@ impl Position {
         symbol: &str,
         open_price: f64,
         order_side: OrderSide,
-        stop_loss: Option<f64>,
         margin_usd: f64,
         leverage: u32,
+        stop_loss: Option<f64>,
     ) -> Self {
         let total = margin_usd * leverage as f64;
         let qty = total / open_price;
@@ -66,18 +66,32 @@ impl Position {
     pub fn set_stop_loss(&mut self, stop_loss: Option<f64>) {
         self.stop_loss = stop_loss
     }
-
-    pub fn set_strategy_id(&mut self, id: StrategyId) {
-        self.strategy_id = Some(id);
-    }
 }
 
+#[derive(Clone)]
 pub struct TradeTx {
     pub id: Uuid,
+    pub close_time: u64,
+    pub close_price: f64,
+    pub position: Position,
 }
 
 impl TradeTx {
     pub fn new(close_price: f64, close_time: u64, position: Position) -> Self {
-        Self { id: Uuid::new_v4() }
+        Self {
+            id: Uuid::new_v4(),
+            close_price,
+            close_time,
+            position,
+        }
+    }
+
+    pub fn calc_profit(&self) -> f64 {
+        let total_open_usd = self.position.open_price * self.position.quantity;
+        let total_close_usd = self.close_price * self.position.quantity;
+        match self.position.order_side {
+            OrderSide::Buy => total_close_usd - total_open_usd,
+            OrderSide::Sell => total_open_usd - total_close_usd,
+        }
     }
 }

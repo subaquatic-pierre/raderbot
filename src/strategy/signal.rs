@@ -38,82 +38,81 @@ impl SignalManager {
             .strategy_open_positions(signal.strategy_id)
             .await;
 
-        if let Some(strategy_settings) = self.active_strategy_settings.get(&signal.strategy_id) {
-            // get last open position
-            if let Some(last) = active_positions.last() {
-                // if last is buy and signal is sell then close all position
-                if signal.order_side != last.order_side {
-                    if let Some(last_price) =
-                        self.market.lock().await.last_price(&signal.symbol).await
-                    {
-                        let close_price = if signal.is_back_test {
-                            signal.price
-                        } else {
-                            last_price
-                        };
-                        for position in &active_positions {
-                            self.account
-                                .lock()
-                                .await
-                                .close_position(position.id, close_price)
-                                .await;
-                        }
-                    }
-                }
+        // get trigger price used in all account actions
+        // from market or signal if signal.is_back_test
+        let trigger_price = if signal.is_back_test {
+            Some(signal.price)
+        } else {
+            self.market.lock().await.last_price(&signal.symbol).await
+        };
 
-                if signal.order_side == last.order_side
-                    && active_positions.len() < strategy_settings.max_open_orders as usize
-                {
-                    if signal.is_back_test {
+        if self
+            .active_strategy_settings
+            .get(&signal.strategy_id)
+            .is_none()
+        {
+            return;
+        }
+
+        // SAFETY: None check above, used to make method more clear
+        let settings = self
+            .active_strategy_settings
+            .get(&signal.strategy_id)
+            .unwrap();
+
+        // get last open position
+        if let Some(last) = active_positions.last() {
+            // if last.signal is different to new signal then close all positions
+            if signal.order_side != last.order_side {
+                if let Some(close_price) = trigger_price {
+                    for position in &active_positions {
                         self.account
                             .lock()
                             .await
-                            .open_position(
-                                &signal.symbol,
-                                strategy_settings.margin_usd,
-                                strategy_settings.leverage,
-                                signal.order_side.clone(),
-                                None,
-                                signal.price,
-                            )
+                            .close_position(position.id, close_price)
                             .await;
-                    } else {
-                        if let Some(last_price) =
-                            self.market.lock().await.last_price(&signal.symbol).await
-                        {
-                            self.account
-                                .lock()
-                                .await
-                                .open_position(
-                                    &signal.symbol,
-                                    strategy_settings.margin_usd,
-                                    strategy_settings.leverage,
-                                    signal.order_side.clone(),
-                                    None,
-                                    last_price,
-                                )
-                                .await;
-                        }
                     }
                 }
-            } else {
-                if let Some(last_price) = self.market.lock().await.last_price(&signal.symbol).await
-                {
+            }
+
+            // if is same signal as last position and settings allow more than one
+            // open position
+            if signal.order_side == last.order_side
+                && active_positions.len() < settings.max_open_orders as usize
+            {
+                if let Some(close_price) = trigger_price {
                     self.account
                         .lock()
                         .await
                         .open_position(
                             &signal.symbol,
-                            strategy_settings.margin_usd,
-                            strategy_settings.leverage,
+                            settings.margin_usd,
+                            settings.leverage,
                             signal.order_side.clone(),
                             None,
-                            last_price,
+                            close_price,
                         )
                         .await;
                 }
             }
+        } else {
+            // no open positions yet for given strategy
+            if let Some(last_price) = trigger_price {
+                self.account
+                    .lock()
+                    .await
+                    .open_position(
+                        &signal.symbol,
+                        settings.margin_usd,
+                        settings.leverage,
+                        signal.order_side.clone(),
+                        None,
+                        last_price,
+                    )
+                    .await;
+            }
         }
+
         info!("{signal:?}");
     }
 

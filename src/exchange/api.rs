@@ -35,8 +35,9 @@ pub trait ExchangeApi: Send + Sync {
     async fn open_position(
         &self,
         symbol: &str,
-        side: OrderSide,
-        quantity: f64,
+        margin_usd: f64,
+        leverage: u32,
+        order_side: OrderSide,
         open_price: f64,
     ) -> ApiResult<Position>;
     async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx>;

@@ -169,10 +169,13 @@ impl ExchangeApi for BingXApi {
     async fn open_position(
         &self,
         symbol: &str,
+        margin_usd: f64,
+        leverage: u32,
         order_side: OrderSide,
-        quantity: f64,
         open_price: f64,
     ) -> ApiResult<Position> {
+        let quantity = (margin_usd * leverage as f64) / open_price;
+
         let endpoint = "/api/v3/order";
 
         // format qty to 8 decimals
@@ -180,7 +183,7 @@ impl ExchangeApi for BingXApi {
 
         let ts = &generate_ts().to_string();
         let side = &order_side.to_string();
-        let quote_qty = 50.to_string();
+        let quote_qty = quantity.to_string();
 
         let request_body = QueryStr::new(vec![
             ("symbol", symbol),
@@ -201,7 +204,9 @@ impl ExchangeApi for BingXApi {
             Ok(_res) => {
                 // parse response
                 // build position from response
-                Ok(Position::new(symbol, open_price, order_side, None, 0.0, 1))
+                Ok(Position::new(
+                    symbol, open_price, order_side, margin_usd, leverage, None,
+                ))
             }
             Err(e) => Err(e),
         }
@@ -209,8 +214,7 @@ impl ExchangeApi for BingXApi {
 
     async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx> {
         // TODO: make api request to close position
-        let position = Position::new("SOME", 0.0, OrderSide::Buy, None, 0.0, 1);
-        Ok(TradeTx::new(1.0, 0, position))
+        Ok(TradeTx::new(close_price, generate_ts(), position))
     }
 
     async fn get_account(&self) -> ApiResult<Value> {

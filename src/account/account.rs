@@ -45,15 +45,9 @@ impl Account {
         stop_loss: Option<f64>,
         open_price: f64,
     ) -> Option<&Position> {
-        // TODO: start stream to update last_price on position
-        // close position if stop loss hit
-        let symbol = Arc::new(symbol.to_string());
-        let quantity = (margin_usd * leverage as f64) / open_price;
-
-        // TODO: make api call to open position
         if let Ok(mut position) = self
             .exchange_api
-            .open_position(&symbol, order_side, quantity, open_price)
+            .open_position(symbol, margin_usd, leverage, order_side, open_price)
             .await
         {
             position.set_stop_loss(stop_loss);
