@@ -6,17 +6,14 @@ use log::info;
 use serde_json::Value;
 
 use crate::account::account::Account;
-use crate::account::trade::{OrderSide, Position, PositionId, TradeTx};
+use crate::account::trade::{OrderSide, PositionId, TradeTx};
 use crate::exchange::api::ExchangeApi;
 use crate::exchange::mock::MockExchangeApi;
-use crate::exchange::stream::{StreamManager, StreamMeta};
-use crate::exchange::types::{ApiResult, StreamType};
-use crate::market::kline::{Kline, KlineData};
+use crate::market::kline::KlineData;
 use crate::market::market::Market;
 use crate::market::messages::MarketMessage;
-use crate::market::ticker::Ticker;
 use crate::market::types::ArcMutex;
-use crate::storage::manager::StorageManager;
+use crate::storage::fs::FsStorageManager;
 use crate::utils::channel::build_arc_channel;
 
 use super::signal::SignalManager;
@@ -30,7 +27,6 @@ pub struct BackTest {
     account: ArcMutex<Account>,
     period_start_price: f64,
     period_end_price: f64,
-    initial_balance: f64,
 }
 
 impl BackTest {
@@ -39,7 +35,7 @@ impl BackTest {
         let exchange_api: Arc<Box<dyn ExchangeApi>> =
             Arc::new(Box::new(MockExchangeApi::default()));
 
-        let storage_manager = StorageManager::default();
+        let storage_manager = Box::new(FsStorageManager::default());
 
         let market = ArcMutex::new(
             Market::new(market_rx, exchange_api.clone(), storage_manager, false).await,
@@ -56,7 +52,6 @@ impl BackTest {
             signals: vec![],
             signal_manager,
             account,
-            initial_balance: initial_balance.unwrap_or_else(|| 0.0),
             period_end_price: 0.0,
             period_start_price: 0.0,
         }
@@ -74,8 +69,8 @@ impl BackTest {
             let eval_result = self.strategy.algorithm.lock().await.evaluate(kline.clone());
 
             let order_side = match eval_result {
-                AlgorithmEvalResult::Buy => OrderSide::Buy,
-                AlgorithmEvalResult::Sell => OrderSide::Sell,
+                AlgorithmEvalResult::Long => OrderSide::Long,
+                AlgorithmEvalResult::Short => OrderSide::Short,
                 AlgorithmEvalResult::Ignore => {
                     continue;
                 }
@@ -144,8 +139,6 @@ impl BackTest {
             .map(|item| (item.id, item.open_price))
             .collect();
 
-        info!("Before Close Remaining, {active_positions:?}");
-
         // close any remaining positions
         for (id, open_price) in active_positions {
             self.account
@@ -155,17 +148,6 @@ impl BackTest {
                 .await;
         }
 
-        let active_positions: Vec<(PositionId, f64)> = self
-            .account
-            .lock()
-            .await
-            .open_positions()
-            .into_iter()
-            .map(|item| (item.id, item.open_price))
-            .collect();
-
-        info!("After Close Remaining, {active_positions:?}");
-
         // get all trade txs
         let trade_txs: Vec<TradeTx> = self.account.lock().await.trade_txs();
 
@@ -173,34 +155,17 @@ impl BackTest {
         let max_drawdown = self.calc_max_drawdown(&trade_txs);
 
         let profit: f64 = trade_txs.iter().map(|trade| trade.calc_profit()).sum();
-        let buy_count = trade_txs
+        let long_count = trade_txs
             .iter()
-            .filter(|trade| trade.position.order_side == OrderSide::Buy)
+            .filter(|trade| trade.position.order_side == OrderSide::Long)
             .count();
-        let sell_count = trade_txs.len() - buy_count;
-
-        let signals = self.signals.clone();
-        let buy_signal_count = signals
-            .iter()
-            .filter(|sig| sig.order_side == OrderSide::Buy)
-            .count();
-
-        let sell_signal_count = signals.len() - buy_signal_count;
-
-        let active_positions: Vec<(PositionId, f64)> = self
-            .account
-            .lock()
-            .await
-            .open_positions()
-            .into_iter()
-            .map(|item| (item.id, item.open_price))
-            .collect();
+        let short_count = trade_txs.len() - long_count;
 
         StrategyResult {
             profit,
-            trade_txs,
-            buy_count,
-            sell_count,
+            // trade_txs,
+            long_count,
+            short_count,
             // signals,
             // // buy_signal_count,
             // sell_signal_count,

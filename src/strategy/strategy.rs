@@ -71,8 +71,8 @@ impl Strategy {
                     let order_side = algorithm.lock().await.evaluate(kline.clone());
 
                     let order_side = match order_side {
-                        AlgorithmEvalResult::Buy => OrderSide::Buy,
-                        AlgorithmEvalResult::Sell => OrderSide::Sell,
+                        AlgorithmEvalResult::Long => OrderSide::Long,
+                        AlgorithmEvalResult::Short => OrderSide::Short,
                         AlgorithmEvalResult::Ignore => {
                             continue;
                         }
@@ -126,10 +126,10 @@ impl Default for StrategySettings {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StrategyResult {
     pub profit: f64,
-    pub trade_txs: Vec<TradeTx>,
+    // pub trade_txs: Vec<TradeTx>,
     // pub signals: Vec<SignalMessage>,
-    pub buy_count: usize,
-    pub sell_count: usize,
+    pub long_count: usize,
+    pub short_count: usize,
     // pub buy_signal_count: usize,
     // pub sell_signal_count: usize,
     pub period_start_price: f64,

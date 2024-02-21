@@ -10,15 +10,15 @@ pub type PositionId = Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd, Copy)]
 pub enum OrderSide {
-    Buy,
-    Sell,
+    Long,
+    Short,
 }
 
 impl Display for OrderSide {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OrderSide::Buy => f.write_str("BUY"),
-            OrderSide::Sell => f.write_str("SELL"),
+            OrderSide::Long => f.write_str("Long"),
+            OrderSide::Short => f.write_str("Short"),
         }
     }
 }
@@ -93,8 +93,8 @@ impl TradeTx {
         let total_open_usd = self.position.open_price * self.position.quantity;
         let total_close_usd = self.close_price * self.position.quantity;
         match self.position.order_side {
-            OrderSide::Buy => total_close_usd - total_open_usd,
-            OrderSide::Sell => total_open_usd - total_close_usd,
+            OrderSide::Long => total_close_usd - total_open_usd,
+            OrderSide::Short => total_open_usd - total_close_usd,
         }
     }
 }
@@ -109,7 +109,7 @@ mod test {
     async fn test_position_new() {
         let symbol = "BTCUSD";
         let open_price = 50000.0;
-        let order_side = OrderSide::Buy;
+        let order_side = OrderSide::Long;
         let margin_usd = 1000.0;
         let leverage = 10;
         let stop_loss = Some(49000.0);
@@ -139,7 +139,14 @@ mod test {
         let close_price = 51000.0;
         let close_time = generate_ts();
 
-        let position = Position::new("BTCUSD", 50000.0, OrderSide::Buy, 1000.0, 10, Some(49000.0));
+        let position = Position::new(
+            "BTCUSD",
+            50000.0,
+            OrderSide::Long,
+            1000.0,
+            10,
+            Some(49000.0),
+        );
 
         let trade_tx = TradeTx::new(close_price, close_time, position.clone());
 

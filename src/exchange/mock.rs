@@ -86,7 +86,7 @@ mod test {
         let symbol = "BTCUSD";
         let margin_usd = 1000.0;
         let leverage = 10;
-        let order_side = OrderSide::Buy;
+        let order_side = OrderSide::Long;
         let open_price = 50000.0;
 
         let result = api
@@ -109,7 +109,7 @@ mod test {
         let symbol = "BTCUSD";
         let margin_usd = 1000.0;
         let leverage = 10;
-        let order_side = OrderSide::Buy;
+        let order_side = OrderSide::Long;
         let open_price = 50000.0;
 
         let position = Position::new(symbol, open_price, order_side, margin_usd, leverage, None);

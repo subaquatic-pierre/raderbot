@@ -12,10 +12,10 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::bot::AppState;
-use crate::market::market::MarketData;
 use crate::utils::crypt::sign_hmac;
 use crate::utils::kline::{
-    interval_symbol_from_binance_filename, load_binance_klines, save_klines,
+    build_kline_filename, build_kline_key, interval_symbol_from_binance_filename,
+    load_binance_klines, save_klines,
 };
 use crate::utils::time::{calculate_kline_open_time, get_time_difference};
 use crate::utils::time::{generate_ts, year_month_day_to_ts};
@@ -89,10 +89,10 @@ async fn load_klines(
 
             let (symbol, interval) = interval_symbol_from_binance_filename(&file_name);
 
-            let kline_key = MarketData::build_kline_key(&symbol, &interval);
+            let kline_key = build_kline_key(&symbol, &interval);
 
             let klines = load_binance_klines(entry.path(), &symbol, &interval);
-            let kline_filename = MarketData::build_kline_filename(&kline_key, klines[0].open_time);
+            let kline_filename = build_kline_filename(&kline_key, klines[0].open_time);
 
             let new_filename = kline_filename.replace("USDT", "-USDT");
 

@@ -13,7 +13,7 @@ use crate::{
         messages::MarketMessage,
         types::{ArcMutex, ArcReceiver, ArcSender},
     },
-    storage::manager::StorageManager,
+    storage::fs::FsStorageManager,
     strategy::{
         backer::BackTest,
         signal::SignalManager,
@@ -54,7 +54,7 @@ impl RaderBot {
         )));
 
         // create new storage manager
-        let storage_manager = StorageManager::default();
+        let storage_manager = Box::new(FsStorageManager::default());
 
         // create new market to hold market data
         let market = Market::new(

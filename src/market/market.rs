@@ -10,6 +10,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::exchange::stream::build_stream_id;
 use crate::exchange::types::{ApiResult, StreamType};
+use crate::utils::kline::{build_kline_key, build_ticker_key};
 use crate::{
     exchange::{
         api::ExchangeApi,
@@ -22,17 +23,13 @@ use crate::{
         types::ArcReceiver,
     },
     storage::manager::StorageManager,
-    utils::{
-        kline::generate_kline_filenames_in_range,
-        time::{generate_ts, timestamp_to_datetime},
-    },
+    utils::time::generate_ts,
 };
 
 use super::types::ArcMutex;
 
 pub struct Market {
     market_receiver: ArcReceiver<MarketMessage>,
-    // stream_manager: ArcMutex<StreamManager>,
     data: ArcMutex<MarketData>,
     exchange_api: Arc<Box<dyn ExchangeApi>>,
     needed_streams: ArcMutex<Vec<StreamMeta>>,
@@ -43,7 +40,7 @@ impl Market {
         // stream_manager: ArcMutex<StreamManager>,
         market_receiver: ArcReceiver<MarketMessage>,
         exchange_api: Arc<Box<dyn ExchangeApi>>,
-        storage_manager: StorageManager,
+        storage_manager: Box<dyn StorageManager>,
         init_workers: bool,
     ) -> Self {
         let mut _self = Self {
@@ -106,8 +103,8 @@ impl Market {
         ticker_data.map(|ticker| ticker.ticker)
     }
 
-    pub async fn market_data(&self) -> MarketData {
-        self.data.lock().await.clone()
+    pub async fn market_data(&self) -> ArcMutex<MarketData> {
+        self.data.clone()
     }
 
     // ---
@@ -254,18 +251,17 @@ pub trait MarketDataSymbol {
     fn symbol(&self) -> String;
 }
 
-#[derive(Serialize, Deserialize, Clone)]
 pub struct MarketData {
     all_klines: HashMap<String, KlineData>,
     all_tickers: HashMap<String, TickerData>,
-    storage_manager: StorageManager,
+    storage_manager: Box<dyn StorageManager>,
     last_backup: SystemTime,
 }
 
 const BACKUP_INTERVAL: u64 = 20;
 
 impl MarketData {
-    pub fn new(storage_manager: StorageManager) -> Self {
+    pub fn new(storage_manager: Box<dyn StorageManager>) -> Self {
         Self {
             storage_manager,
             all_klines: HashMap::new(),
@@ -278,7 +274,7 @@ impl MarketData {
         // TODO: Ensure memory is recycled, remove old data
 
         // get kline key eg. BTCUSDT@kline_1m
-        let kline_key = Self::build_kline_key(&kline.symbol, &kline.interval);
+        let kline_key = build_kline_key(&kline.symbol, &kline.interval);
 
         // add new kline to data if key found for kline symbol
         if let Some(kline_data) = self.all_klines.get_mut(&kline_key) {
@@ -319,7 +315,7 @@ impl MarketData {
     }
 
     pub fn update_ticker(&mut self, ticker: Ticker) {
-        let ticker_key = Self::build_ticker_key(&ticker.symbol);
+        let ticker_key = build_ticker_key(&ticker.symbol);
         let now = generate_ts();
 
         if let Some(ticker_data) = self.all_tickers.get_mut(&ticker_key) {
@@ -342,38 +338,16 @@ impl MarketData {
         to_ts: Option<u64>,
         limit: Option<usize>,
     ) -> Option<KlineData> {
-        let kline_key = Self::build_kline_key(symbol, interval);
+        let kline_key = build_kline_key(symbol, interval);
 
         let in_mem_kline = match self.all_klines.get(&kline_key) {
             Some(kline_data) => kline_data.klines.clone(),
             None => vec![],
         };
 
-        // create filtered klines to hold all klines which are filtered
-        let mut filtered_klines: Vec<Kline> = Vec::new();
-
-        let filenames = match from_ts {
-            Some(from_ts) => match to_ts {
-                Some(to_ts) => Some(generate_kline_filenames_in_range(
-                    &kline_key, from_ts, to_ts,
-                )),
-                None => Some(generate_kline_filenames_in_range(
-                    &kline_key,
-                    from_ts,
-                    generate_ts(),
-                )),
-            },
-            None => None,
-        };
-
-        if let Some(filenames) = filenames {
-            for kline_filename in filenames {
-                if let Some(klines) = self.storage_manager.load_klines(&kline_filename) {
-                    filtered_klines.extend_from_slice(&klines);
-                }
-            }
-        };
-
+        let mut filtered_klines = self
+            .storage_manager
+            .load_klines(symbol, interval, from_ts, to_ts, limit);
         filtered_klines.extend_from_slice(&in_mem_kline);
 
         // filtered by from_ts and to_ts
@@ -414,33 +388,11 @@ impl MarketData {
 
     /// return last 20 seconds of tickers for given symbol
     pub fn ticker_data(&self, symbol: &str) -> Option<TickerData> {
-        let ticker_key = Self::build_ticker_key(symbol);
+        let ticker_key = build_ticker_key(symbol);
         if let Some(ticker_data) = self.all_tickers.get(&ticker_key) {
             return Some(ticker_data.clone());
         }
 
         None
-    }
-
-    pub fn build_kline_key(symbol: &str, interval: &str) -> String {
-        format!("{}@kline_{}", symbol, interval)
-    }
-
-    pub fn build_ticker_key(symbol: &str) -> String {
-        format!("{}@ticker", symbol)
-    }
-
-    pub fn build_kline_filename(kline_key: &str, timestamp: u64) -> String {
-        let month_str = Self::build_kline_month_string(timestamp);
-        format!("{kline_key}-{month_str}.csv")
-    }
-
-    pub fn build_kline_filename_from_year_month(kline_key: &str, year: u32, month: u32) -> String {
-        format!("{kline_key}-{:04}-{:02}.csv", year, month)
-    }
-
-    pub fn build_kline_month_string(timestamp: u64) -> String {
-        let timestamp = timestamp_to_datetime(timestamp);
-        timestamp.format("%Y-%m").to_string()
     }
 }

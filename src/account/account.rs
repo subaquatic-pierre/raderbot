@@ -120,6 +120,7 @@ mod test {
         exchange::{api::ExchangeApi, mock::MockExchangeApi},
     };
     use tokio::test;
+    use uuid::Uuid;
 
     #[test]
     async fn test_open_position() {
@@ -128,14 +129,14 @@ mod test {
 
         // Open a position
         let position = account
-            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Long, 50000.0, None, None)
             .await
             .unwrap();
 
         assert_eq!(position.symbol, "BTCUSD");
         assert_eq!(position.margin_usd, 1000.0);
         assert_eq!(position.leverage, 10);
-        assert_eq!(position.order_side, OrderSide::Buy);
+        assert_eq!(position.order_side, OrderSide::Long);
 
         assert_eq!(account.positions.len(), 1);
         // Close the opened position
@@ -155,7 +156,7 @@ mod test {
 
         // Open a position
         let position = account
-            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Long, 50000.0, None, None)
             .await
             .unwrap();
 
@@ -169,8 +170,72 @@ mod test {
         assert_eq!(account.trade_txs.len(), 1);
         assert_eq!(account.trade_txs[0].id, trade_tx.id);
         // Close the opened position
+    }
 
-        // // Ensure the positions and trade transactions are updated accordingly
+    #[test]
+    async fn test_close_multiple_positions() {
+        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let mut account = Account::new(exchange_api.clone(), false).await;
+
+        const NUM_POSITIONS: usize = 10; // Change this to the desired number of positions for testing
+
+        let mut positions = Vec::new();
+        let mut trade_txs = Vec::new();
+
+        // Open multiple positions
+        for _ in 0..NUM_POSITIONS {
+            let symbol = "BTCUSD";
+            let margin_usd = rand::random::<f64>() * 1000.0;
+            let leverage = rand::random::<u32>() % 10 + 1;
+            let order_side = if rand::random::<bool>() {
+                OrderSide::Long
+            } else {
+                OrderSide::Short
+            };
+            let open_price = rand::random::<f64>() * 50000.0;
+
+            let position = account
+                .open_position(
+                    symbol, margin_usd, leverage, order_side, open_price, None, None,
+                )
+                .await
+                .unwrap();
+            positions.push(position.clone());
+        }
+
+        for pos in &positions {
+            if let Some(trade_tx) = account.close_position(pos.id, pos.open_price).await {
+                trade_txs.push(trade_tx.clone());
+            };
+        }
+
+        let order_long: Vec<Position> = positions
+            .iter()
+            .filter(|e| e.order_side == OrderSide::Long)
+            .map(|e| e.clone())
+            .collect();
+        let order_short: Vec<Position> = positions
+            .iter()
+            .filter(|e| e.order_side == OrderSide::Short)
+            .map(|e| e.clone())
+            .collect();
+
+        let tx_long: Vec<TradeTx> = trade_txs
+            .iter()
+            .filter(|e| e.position.order_side == OrderSide::Long)
+            .map(|e| e.clone())
+            .collect();
+        let tx_short: Vec<TradeTx> = trade_txs
+            .iter()
+            .filter(|e| e.position.order_side == OrderSide::Short)
+            .map(|e| e.clone())
+            .collect();
+
+        assert_eq!(order_long.len(), tx_long.len());
+        assert_eq!(order_short.len(), tx_short.len());
+        assert_eq!(positions.len(), trade_txs.len());
+
+        // Close the opened position
     }
 
     #[test]
@@ -180,7 +245,7 @@ mod test {
 
         // Open a position
         account
-            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Long, 50000.0, None, None)
             .await
             .unwrap();
 
@@ -191,7 +256,7 @@ mod test {
         assert_eq!(open_positions[0].symbol, "BTCUSD");
         assert_eq!(open_positions[0].margin_usd, 1000.0);
         assert_eq!(open_positions[0].leverage, 10);
-        assert_eq!(open_positions[0].order_side, OrderSide::Buy);
+        assert_eq!(open_positions[0].order_side, OrderSide::Long);
     }
 
     #[test]
@@ -208,7 +273,7 @@ mod test {
                 "BTCUSD",
                 1000.0,
                 10,
-                OrderSide::Buy,
+                OrderSide::Long,
                 50000.0,
                 Some(strategy_id_1),
                 None,
@@ -222,7 +287,7 @@ mod test {
                 "ETHUSD",
                 500.0,
                 5,
-                OrderSide::Sell,
+                OrderSide::Short,
                 2000.0,
                 Some(strategy_id_1),
                 None,
@@ -237,7 +302,7 @@ mod test {
                 "BTCUSD",
                 200.0,
                 2,
-                OrderSide::Buy,
+                OrderSide::Long,
                 48000.0,
                 Some(strategy_id_2),
                 None,

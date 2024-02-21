@@ -17,8 +17,8 @@ pub struct SignalMessage {
 }
 
 pub enum AlgorithmEvalResult {
-    Buy,
-    Sell,
+    Long,
+    Short,
     Ignore,
 }
 

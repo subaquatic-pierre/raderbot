@@ -64,16 +64,16 @@ impl Algorithm for EmaSmaCrossover {
 
             // EMA crossover signal
             if ema > sma {
-                return AlgorithmEvalResult::Buy;
+                return AlgorithmEvalResult::Long;
             } else if ema < sma {
-                return AlgorithmEvalResult::Sell;
+                return AlgorithmEvalResult::Short;
             }
 
             // SMA crossover signal (additional signal for diversity)
             if kline.close > sma {
-                return AlgorithmEvalResult::Buy;
+                return AlgorithmEvalResult::Long;
             } else if kline.close < sma {
-                return AlgorithmEvalResult::Sell;
+                return AlgorithmEvalResult::Short;
             }
         }
 

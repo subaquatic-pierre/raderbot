@@ -3,10 +3,7 @@ use chrono::Datelike;
 use std::fs::File;
 
 use crate::{
-    market::{
-        kline::{BinanceKline, Kline},
-        market::MarketData,
-    },
+    market::kline::{BinanceKline, Kline},
     utils::{csv::has_header, time::timestamp_to_datetime},
 };
 use csv::Reader;
@@ -114,11 +111,7 @@ pub fn generate_kline_filenames_in_range(kline_key: &str, from_ts: u64, to_ts: u
     let mut current_year = from_year;
     let mut current_month = from_month;
     while current_year < to_year || (current_year == to_year && current_month <= to_month) {
-        let filename = MarketData::build_kline_filename_from_year_month(
-            kline_key,
-            current_year,
-            current_month,
-        );
+        let filename = build_kline_filename_from_year_month(kline_key, current_year, current_month);
         filenames.push(filename);
 
         current_month += 1;
@@ -129,6 +122,28 @@ pub fn generate_kline_filenames_in_range(kline_key: &str, from_ts: u64, to_ts: u
     }
 
     filenames
+}
+
+pub fn build_kline_key(symbol: &str, interval: &str) -> String {
+    format!("{}@kline_{}", symbol, interval)
+}
+
+pub fn build_ticker_key(symbol: &str) -> String {
+    format!("{}@ticker", symbol)
+}
+
+pub fn build_kline_filename(kline_key: &str, timestamp: u64) -> String {
+    let month_str = build_kline_month_string(timestamp);
+    format!("{kline_key}-{month_str}.csv")
+}
+
+pub fn build_kline_filename_from_year_month(kline_key: &str, year: u32, month: u32) -> String {
+    format!("{kline_key}-{:04}-{:02}.csv", year, month)
+}
+
+pub fn build_kline_month_string(timestamp: u64) -> String {
+    let timestamp = timestamp_to_datetime(timestamp);
+    timestamp.format("%Y-%m").to_string()
 }
 
 #[cfg(test)]
