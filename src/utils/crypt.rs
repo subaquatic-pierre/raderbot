@@ -18,3 +18,35 @@ pub fn sign_hmac(secret: &str, message: &str) -> String {
 
     hmac_string
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sign_hmac() {
+        // Test with valid secret and message
+        let secret = "your_secret_key";
+        let message = "some_message";
+        let result = sign_hmac(secret, message);
+        assert_eq!(result.len(), 64); // Check if the result is a valid SHA256 HMAC
+
+        // Test with another valid secret and message
+        let secret = "another_secret_key";
+        let message = "another_message";
+        let result = sign_hmac(secret, message);
+        assert_eq!(result.len(), 64);
+
+        // Test with an empty secret
+        let empty_secret = "";
+        let message = "some_message";
+        let result = sign_hmac(empty_secret, message);
+        assert_eq!(result.len(), 64);
+
+        // Test with an empty message
+        let secret = "your_secret_key";
+        let empty_message = "";
+        let result = sign_hmac(secret, empty_message);
+        assert_eq!(result.len(), 64);
+    }
+}

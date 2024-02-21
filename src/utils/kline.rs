@@ -1,10 +1,6 @@
 use chrono::Datelike;
 
-use serde::{Deserialize, Serialize};
-
 use std::fs::File;
-
-use std::io::BufRead;
 
 use crate::{
     market::{
@@ -133,4 +129,9 @@ pub fn generate_kline_filenames_in_range(kline_key: &str, from_ts: u64, to_ts: u
     }
 
     filenames
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO: Write tests
 }

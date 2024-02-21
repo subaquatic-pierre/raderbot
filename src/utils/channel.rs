@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use futures_util::lock::Mutex;
-use serde_json::Value;
 use tokio::sync::mpsc::unbounded_channel;
 
 use crate::market::types::{ArcReceiver, ArcSender};
@@ -15,15 +14,22 @@ pub fn build_arc_channel<T>() -> (ArcSender<T>, ArcReceiver<T>) {
     (sender, receiver)
 }
 
-pub async fn get_ticker(url: &str) -> String {
-    let client = reqwest::Client::new();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let response = client.get(url).send().await;
+    #[tokio::test]
+    async fn test_build_arc_channel() {
+        // Test building an ARC channel
+        let (sender, receiver) = build_arc_channel::<String>();
 
-    let response = match response {
-        Ok(res) => res.json::<Value>().await.unwrap().to_string(),
-        Err(e) => format!("{e:?}"),
-    };
+        // Send a message through the channel
+        sender.send("Test Message".to_string()).unwrap();
 
-    response
+        // Receive the message from the channel
+        let received_message = receiver.lock().await.recv().await.unwrap();
+
+        // Assert that the sent and received messages match
+        assert_eq!(received_message, "Test Message");
+    }
 }

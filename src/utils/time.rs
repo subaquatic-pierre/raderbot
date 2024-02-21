@@ -1,6 +1,6 @@
 use chrono::prelude::DateTime;
 use dateparser::parse;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
@@ -28,7 +28,7 @@ pub fn timestamp_to_datetime(timestamp: u64) -> DateTime<Utc> {
     let naive =
         NaiveDateTime::from_timestamp_opt(n_ts as i64 / 1000, (n_ts % 1000) as u32 * 1_000_000)
             .unwrap();
-    DateTime::<Utc>::from_utc(naive, Utc)
+    DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc)
 }
 
 pub fn string_to_timestamp(date_str: &str) -> Result<u64, &'static str> {
@@ -54,8 +54,6 @@ pub fn timestamp_to_string(ts: u64) -> Result<String, &'static str> {
     let timestamp_str = datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string();
 
     Ok(timestamp_str)
-
-    // Err("Unable to parse date string")
 }
 
 pub fn year_month_day_to_ts(year: u32, month: u32, day: u32) -> Option<u64> {
