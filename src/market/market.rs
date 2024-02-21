@@ -8,6 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 
 // use tokio::time::{self, Duration};
 
+use crate::exchange::api::ExchangeInfo;
 use crate::exchange::stream::build_stream_id;
 use crate::exchange::types::{ApiResult, StreamType};
 use crate::utils::kline::{build_kline_key, build_ticker_key};
@@ -245,6 +246,19 @@ impl Market {
 
         needed_streams.retain(|x| x.id != stream_id);
     }
+
+    pub async fn info(&self) -> MarketInfo {
+        MarketInfo {
+            exchange_info: self.exchange_api.info().await.ok(),
+            num_active_streams: self.active_streams().await.len(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MarketInfo {
+    exchange_info: Option<ExchangeInfo>,
+    num_active_streams: usize,
 }
 
 pub trait MarketDataSymbol {

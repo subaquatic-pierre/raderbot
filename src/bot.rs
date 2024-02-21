@@ -104,7 +104,7 @@ impl RaderBot {
         interval: &str,
         settings: StrategySettings,
         algorithm_params: Value,
-    ) -> Result<u32, AlgorithmError> {
+    ) -> Result<StrategyId, AlgorithmError> {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
 
@@ -132,7 +132,7 @@ impl RaderBot {
         Ok(strategy_id)
     }
 
-    pub async fn stop_strategy(&mut self, strategy_id: u32) -> String {
+    pub async fn stop_strategy(&mut self, strategy_id: StrategyId) -> String {
         if let Some(handle) = self.strategy_handles.get(&strategy_id) {
             handle.abort();
 
@@ -209,7 +209,7 @@ impl RaderBot {
 
         tokio::spawn(async move {
             while let Some(signal) = strategy_rx.lock().await.recv().await {
-                signal_manager.lock().await.handle_signal(signal);
+                signal_manager.lock().await.handle_signal(signal).await;
             }
         });
     }

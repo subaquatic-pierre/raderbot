@@ -19,11 +19,11 @@ pub struct ThreeMaCrossover {
 
 impl ThreeMaCrossover {
     pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
-        let short_period = parse_usize_from_value("short_period", params.clone())
+        let short_period = parse_usize_from_value("short_period", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let medium_period = parse_usize_from_value("medium_period", params.clone())
+        let medium_period = parse_usize_from_value("medium_period", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let long_period = parse_usize_from_value("long_period", params.clone())
+        let long_period = parse_usize_from_value("long_period", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
 
         Ok(Self {
@@ -100,11 +100,11 @@ impl Algorithm for ThreeMaCrossover {
     }
 
     fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
-        let short_period = parse_usize_from_value("short_period", params.clone())
+        let short_period = parse_usize_from_value("short_period", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let medium_period = parse_usize_from_value("medium_period", params.clone())
+        let medium_period = parse_usize_from_value("medium_period", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let long_period = parse_usize_from_value("long_period", params.clone())
+        let long_period = parse_usize_from_value("long_period", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
 
         self.params = params;

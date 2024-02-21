@@ -5,9 +5,10 @@ use actix_web::{
     HttpResponse, Responder, Scope,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 
+use crate::account::trade::{Position, TradeTx};
 use crate::bot::AppState;
 use crate::strategy::strategy::{StrategyId, StrategySettings};
 use crate::utils::time::string_to_timestamp;
@@ -61,7 +62,7 @@ async fn new_strategy(
 
 #[derive(Debug, Deserialize)]
 pub struct StopStrategyParams {
-    strategy_id: u32,
+    strategy_id: StrategyId,
 }
 #[post("/stop-strategy")]
 async fn stop_strategy(
@@ -77,13 +78,105 @@ async fn stop_strategy(
     HttpResponse::Ok().json(json_data)
 }
 
+#[post("/list-positions")]
+async fn list_strategy_positions(
+    app_data: web::Data<AppState>,
+    body: web::Json<StopStrategyParams>,
+) -> impl Responder {
+    let account = app_data.get_account().await;
+
+    let positions: Vec<Position> = account
+        .lock()
+        .await
+        .strategy_positions(body.strategy_id)
+        .iter()
+        .map(|&el| el.clone())
+        .collect();
+
+    let json_data = json!({ "positions": positions });
+
+    HttpResponse::Ok().json(json_data)
+}
+
+#[post("/summary")]
+async fn strategy_summary(
+    app_data: web::Data<AppState>,
+    body: web::Json<StopStrategyParams>,
+) -> impl Responder {
+    let mut bot = app_data.bot.lock().await;
+    let account = bot.account.clone();
+
+    if let Some(strategy) = bot.get_strategy(body.strategy_id) {
+        let positions: Vec<Position> = account
+            .lock()
+            .await
+            .strategy_positions(body.strategy_id)
+            .iter()
+            .map(|&el| el.clone())
+            .collect();
+
+        let trades: Vec<TradeTx> = account
+            .lock()
+            .await
+            .strategy_trades(body.strategy_id)
+            .iter()
+            .map(|&el| el.clone())
+            .collect();
+
+        let info = strategy.info().await;
+        let json_data = json!({ "strategy_info": info, "positions": positions, "trades": trades });
+
+        return HttpResponse::Ok().json(json_data);
+    };
+
+    let json_data = json!({ "error": "Unable to find strategy" });
+
+    HttpResponse::ExpectationFailed().json(json_data)
+    // if let Some(strategy) = bot.get_strategy(body.strategy_id) {
+
+    // let trades: Vec<u8> = vec![];
+    // let positions: Vec<u8> = vec![];
+
+    // let info = strategy.info().await;
+    // let json_data = json!({ "strategy_info": info, "trades": trades, "positions": positions });
+
+    //     return HttpResponse::Ok().json(json_data);
+    // };
+}
+
+#[post("/info")]
+async fn strategy_info(
+    app_data: web::Data<AppState>,
+    body: web::Json<StopStrategyParams>,
+) -> impl Responder {
+    let mut bot = app_data.bot.lock().await;
+    if let Some(strategy) = bot.get_strategy(body.strategy_id) {
+        let info = strategy.info().await;
+        let json_data = json!({ "strategy_info": info });
+
+        return HttpResponse::Ok().json(json_data);
+    };
+
+    let json_data = json!({ "error": "Unable to find strategy" });
+
+    HttpResponse::ExpectationFailed().json(json_data)
+}
+
 #[get("/active-strategies")]
 async fn get_strategy_ids(app_data: web::Data<AppState>) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let strategies = bot.lock().await.get_strategy_ids();
+    let strategy_ids = bot.lock().await.get_strategy_ids();
 
-    let json_data = json!({ "strategies": strategies });
+    let mut infos = vec![];
+
+    for id in strategy_ids {
+        if let Some(strategy) = bot.lock().await.get_strategy(id) {
+            infos.push(strategy.info().await.clone())
+        }
+    }
+
+    let json_data = json!({ "strategies": infos });
 
     HttpResponse::Ok().json(json_data)
 }
@@ -108,7 +201,7 @@ pub struct SetStrategyParams {
     strategy_id: StrategyId,
     params: Value,
 }
-#[post("/set-strategy-params")]
+#[post("/set-params")]
 async fn set_strategy_params(
     app_data: web::Data<AppState>,
     body: Json<SetStrategyParams>,
@@ -122,6 +215,27 @@ async fn set_strategy_params(
             let json_data = json!({ "success": { "updated_params": updated_params } });
             HttpResponse::Ok().json(json_data)
         }
+    } else {
+        let json_data = json!({ "error": "Unable to find strategy" });
+        HttpResponse::Ok().json(json_data)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ChangeSettingsParams {
+    strategy_id: StrategyId,
+    settings: StrategySettings,
+}
+#[post("/change-settings")]
+async fn change_strategy_settings(
+    app_data: web::Data<AppState>,
+    body: Json<ChangeSettingsParams>,
+) -> impl Responder {
+    if let Some(strategy) = app_data.bot.lock().await.get_strategy(body.strategy_id) {
+        strategy.change_settings(body.settings.clone());
+        let json_data = json!({ "success": { "updated_settings": body.settings } });
+
+        HttpResponse::Ok().json(json_data)
     } else {
         let json_data = json!({ "error": "Unable to find strategy" });
         HttpResponse::Ok().json(json_data)
@@ -193,8 +307,12 @@ pub fn register_strategy_service() -> Scope {
     scope("/strategy")
         .service(new_strategy)
         .service(stop_strategy)
+        .service(list_strategy_positions)
+        .service(strategy_info)
+        .service(strategy_summary)
         .service(get_strategy_ids)
         .service(stop_all_strategies)
         .service(set_strategy_params)
+        .service(change_strategy_settings)
         .service(run_back_test)
 }

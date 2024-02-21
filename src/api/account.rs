@@ -65,7 +65,7 @@ async fn close_all_positions(app_data: web::Data<AppState>) -> impl Responder {
 
     let mut trades = vec![];
 
-    let positions: Vec<Position> = account.open_positions().map(|pos| pos.clone()).collect();
+    let positions: Vec<Position> = account.positions().map(|pos| pos.clone()).collect();
 
     for position in positions {
         if let Some(last_price) = market.last_price(&position.symbol).await {
@@ -128,7 +128,7 @@ async fn list_active_positions(app_data: web::Data<AppState>, _req: HttpRequest)
     let account = app_data.get_account().await;
     let mut positions = vec![];
 
-    for position in account.lock().await.open_positions() {
+    for position in account.lock().await.positions() {
         positions.push(position.clone())
     }
 
@@ -140,13 +140,13 @@ async fn list_active_positions(app_data: web::Data<AppState>, _req: HttpRequest)
 #[get("/trades")]
 async fn list_trades(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
     let account = app_data.get_account().await;
-    let mut trade_txs = vec![];
+    let mut trades = vec![];
 
-    for trade in account.lock().await.trade_txs() {
-        trade_txs.push(trade.clone())
+    for trade in account.lock().await.trades() {
+        trades.push(trade.clone())
     }
 
-    let json_data = json!({ "trades": trade_txs });
+    let json_data = json!({ "trades": trades });
 
     HttpResponse::Ok().json(json_data)
 }

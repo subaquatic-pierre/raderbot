@@ -26,9 +26,9 @@ pub struct EmaSmaCrossover {
 
 impl EmaSmaCrossover {
     pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
-        let ema_period = parse_usize_from_value("ema_period", params.clone())
+        let ema_period = parse_usize_from_value("ema_period", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let sma_period = parse_usize_from_value("sma_period", params.clone())
+        let sma_period = parse_usize_from_value("sma_period", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
 
         let ema = ExponentialMovingAverage::new(ema_period)
@@ -95,9 +95,9 @@ impl Algorithm for EmaSmaCrossover {
     }
 
     fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
-        let ema_period = parse_usize_from_value("ema_period", params.clone())
+        let ema_period = parse_usize_from_value("ema_period", &params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let sma_period = parse_usize_from_value("sma_period", params.clone())
+        let sma_period = parse_usize_from_value("sma_period", &params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
 
         let ema = ExponentialMovingAverage::new(ema_period)

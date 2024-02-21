@@ -26,7 +26,7 @@ pub fn parse_f64_from_lookup(key: &str, lookup: &HashMap<String, Value>) -> ApiR
     }
 }
 
-pub fn parse_usize_from_value(key: &str, value: Value) -> Result<usize, &'static str> {
+pub fn parse_usize_from_value(key: &str, value: &Value) -> Result<usize, &'static str> {
     if let Some(val) = value.get(key) {
         if let Some(num) = val.as_u64() {
             return Ok(num as usize);
@@ -75,18 +75,18 @@ mod tests {
         // Test with a valid value containing a usize
         let value = json!({"key": 10});
         assert_eq!(
-            parse_usize_from_value("key", value),
+            parse_usize_from_value("key", &value),
             Ok(10),
             "Failed to parse usize from value"
         );
 
         // Test with a missing key
         let value = json!({});
-        assert!(parse_usize_from_value("non_existing_key", value).is_err());
+        assert!(parse_usize_from_value("non_existing_key", &value).is_err());
 
         // Test with a key pointing to a non-integer value
         let value = json!({"key": "string_value"});
-        assert!(parse_usize_from_value("key", value).is_err());
+        assert!(parse_usize_from_value("key", &value).is_err());
     }
 
     #[test]

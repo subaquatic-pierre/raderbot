@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use log::info;
 
 use crate::{
-    account::account::Account,
+    account::{account::Account, trade::Position},
     market::{market::Market, types::ArcMutex},
 };
 
@@ -28,11 +28,15 @@ impl SignalManager {
     }
 
     pub async fn handle_signal(&mut self, signal: SignalMessage) {
-        let active_positions = self
+        info!("Signal: {signal:?}");
+        let active_positions: Vec<Position> = self
             .account
             .lock()
             .await
-            .strategy_open_positions(signal.strategy_id);
+            .strategy_positions(signal.strategy_id)
+            .iter()
+            .map(|&el| el.clone())
+            .collect();
 
         // get trigger price used in all account actions
         // from market or signal if signal.is_back_test
@@ -41,6 +45,8 @@ impl SignalManager {
         } else {
             self.market.lock().await.last_price(&signal.symbol).await
         };
+
+        info!("Trigger Price: {signal:?}");
 
         if self
             .active_strategy_settings
@@ -55,6 +61,8 @@ impl SignalManager {
             .active_strategy_settings
             .get(&signal.strategy_id)
             .unwrap();
+
+        info!("Strategy Settings: {settings:?}");
 
         // get last open position
         if let Some(last) = active_positions.last() {
@@ -110,11 +118,11 @@ impl SignalManager {
         }
     }
 
-    pub fn add_strategy_settings(&mut self, strategy_id: u32, settings: StrategySettings) {
+    pub fn add_strategy_settings(&mut self, strategy_id: StrategyId, settings: StrategySettings) {
         self.active_strategy_settings.insert(strategy_id, settings);
     }
 
-    pub fn remove_strategy_settings(&mut self, strategy_id: u32) {
+    pub fn remove_strategy_settings(&mut self, strategy_id: StrategyId) {
         self.active_strategy_settings.remove(&strategy_id);
     }
 }

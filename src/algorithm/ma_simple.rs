@@ -17,7 +17,7 @@ pub struct SimpleMovingAverage {
 
 impl SimpleMovingAverage {
     pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
-        let period = parse_usize_from_value("sma_period", params.clone())
+        let period = parse_usize_from_value("sma_period", &params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
         Ok(Self {
             data_points: vec![],
@@ -27,20 +27,20 @@ impl SimpleMovingAverage {
         })
     }
 
-    fn calculate_sma(&self) -> f64 {
-        let start_index = self.data_points.len().saturating_sub(self.period); // Avoid index underflow
+    fn calculate_sma(&self, period: usize) -> f64 {
+        if self.data_points.len() < period {
+            return 0.0;
+        }
 
         let sum: f64 = self
             .data_points
             .iter()
             .rev()
-            .skip(start_index)
+            .take(period)
             .map(|k| k.close)
             .sum();
 
-        let divisor = usize::min(self.period, self.data_points.len()); // Ensure divisor is not zero
-
-        sum / divisor as f64
+        sum / period as f64
     }
 }
 
@@ -49,7 +49,7 @@ impl Algorithm for SimpleMovingAverage {
         self.data_points.push(kline.clone());
 
         if self.data_points.len() >= self.period {
-            let sma = self.calculate_sma();
+            let sma = self.calculate_sma(self.period);
 
             // Placeholder logic for buy/sell decision based on SMA
             if kline.close > sma {
@@ -75,7 +75,7 @@ impl Algorithm for SimpleMovingAverage {
     }
 
     fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
-        let period = parse_usize_from_value("sma_period", params.clone())
+        let period = parse_usize_from_value("sma_period", &params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
 
         self.period = period;

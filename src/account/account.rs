@@ -14,7 +14,7 @@ use super::trade::{PositionId, TradeTx};
 
 pub struct Account {
     positions: HashMap<PositionId, Position>,
-    trade_txs: Vec<TradeTx>,
+    trades: Vec<TradeTx>,
     exchange_api: Arc<Box<dyn ExchangeApi>>,
     dry_run: bool,
 }
@@ -28,7 +28,7 @@ impl Account {
         let _self = Self {
             exchange_api,
             positions: HashMap::new(),
-            trade_txs: vec![],
+            trades: vec![],
             dry_run,
         };
 
@@ -80,9 +80,9 @@ impl Account {
 
                 let trade_tx_id = trade_tx.id;
 
-                self.trade_txs.push(trade_tx);
+                self.trades.push(trade_tx);
 
-                if let Some(tx) = self.trade_txs.iter().find(|e| e.id == trade_tx_id) {
+                if let Some(tx) = self.trades.iter().find(|e| e.id == trade_tx_id) {
                     return Some(tx);
                 }
             };
@@ -91,24 +91,36 @@ impl Account {
         None
     }
 
-    pub fn open_positions(&self) -> Values<'_, PositionId, Position> {
+    pub fn positions(&self) -> Values<'_, PositionId, Position> {
         self.positions.values()
     }
 
-    pub fn trade_txs(&self) -> Vec<TradeTx> {
-        self.trade_txs.clone()
+    pub fn trades(&self) -> Vec<TradeTx> {
+        self.trades.clone()
     }
 
-    pub fn strategy_open_positions(&self, strategy_id: StrategyId) -> Vec<Position> {
+    pub fn strategy_positions(&self, strategy_id: StrategyId) -> Vec<&Position> {
         let mut positions = vec![];
         for pos in self.positions.values() {
             if let Some(pos_strategy_id) = pos.strategy_id {
                 if pos_strategy_id == strategy_id {
-                    positions.push(pos.clone())
+                    positions.push(pos)
                 }
             }
         }
         positions
+    }
+
+    pub fn strategy_trades(&self, strategy_id: StrategyId) -> Vec<&TradeTx> {
+        let mut trades = vec![];
+        for trade in &self.trades {
+            if let Some(strategy_id) = trade.position.strategy_id {
+                if strategy_id == strategy_id {
+                    trades.push(trade)
+                }
+            }
+        }
+        trades
     }
 
     pub fn is_dry_run(&self) -> bool {
@@ -125,8 +137,8 @@ impl Account {
         AccountInfo {
             dry_run: self.dry_run,
             exchange_api: info,
-            open_positions: self.positions.values().map(|el| el.clone()).collect(),
-            trade_transactions: self.trade_txs.clone(),
+            positions: self.positions.values().map(|el| el.clone()).collect(),
+            trade_transactions: self.trades.clone(),
         }
     }
 
@@ -147,7 +159,7 @@ impl Account {
 pub struct AccountInfo {
     dry_run: bool,
     exchange_api: Option<ExchangeInfo>,
-    open_positions: Vec<Position>,
+    positions: Vec<Position>,
     trade_transactions: Vec<TradeTx>,
 }
 
@@ -199,8 +211,8 @@ mod test {
 
         assert_eq!(trade_tx.close_price, 55000.0);
         assert_eq!(account.positions.len(), 0);
-        assert_eq!(account.trade_txs.len(), 1);
-        assert_eq!(account.trade_txs[0].id, trade_tx.id);
+        assert_eq!(account.trades.len(), 1);
+        assert_eq!(account.trades[0].id, trade_tx.id);
         // Close the opened position
     }
 
@@ -212,7 +224,7 @@ mod test {
         const NUM_POSITIONS: usize = 10; // Change this to the desired number of positions for testing
 
         let mut positions = Vec::new();
-        let mut trade_txs = Vec::new();
+        let mut trades = Vec::new();
 
         // Open multiple positions
         for _ in 0..NUM_POSITIONS {
@@ -237,7 +249,7 @@ mod test {
 
         for pos in &positions {
             if let Some(trade_tx) = account.close_position(pos.id, pos.open_price).await {
-                trade_txs.push(trade_tx.clone());
+                trades.push(trade_tx.clone());
             };
         }
 
@@ -252,12 +264,12 @@ mod test {
             .map(|e| e.clone())
             .collect();
 
-        let tx_long: Vec<TradeTx> = trade_txs
+        let tx_long: Vec<TradeTx> = trades
             .iter()
             .filter(|e| e.position.order_side == OrderSide::Long)
             .map(|e| e.clone())
             .collect();
-        let tx_short: Vec<TradeTx> = trade_txs
+        let tx_short: Vec<TradeTx> = trades
             .iter()
             .filter(|e| e.position.order_side == OrderSide::Short)
             .map(|e| e.clone())
@@ -265,7 +277,7 @@ mod test {
 
         assert_eq!(order_long.len(), tx_long.len());
         assert_eq!(order_short.len(), tx_short.len());
-        assert_eq!(positions.len(), trade_txs.len());
+        assert_eq!(positions.len(), trades.len());
 
         // Close the opened position
     }
@@ -282,13 +294,13 @@ mod test {
             .unwrap();
 
         // Check the open positions
-        let open_positions = account.open_positions().collect::<Vec<_>>();
+        let positions = account.positions().collect::<Vec<_>>();
 
-        assert_eq!(open_positions.len(), 1);
-        assert_eq!(open_positions[0].symbol, "BTCUSD");
-        assert_eq!(open_positions[0].margin_usd, 1000.0);
-        assert_eq!(open_positions[0].leverage, 10);
-        assert_eq!(open_positions[0].order_side, OrderSide::Long);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].symbol, "BTCUSD");
+        assert_eq!(positions[0].margin_usd, 1000.0);
+        assert_eq!(positions[0].leverage, 10);
+        assert_eq!(positions[0].order_side, OrderSide::Long);
     }
 
     #[test]
@@ -296,8 +308,8 @@ mod test {
         let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
         let mut account = Account::new(exchange_api.clone(), false, true).await;
 
-        let strategy_id_1 = generate_random_id();
-        let strategy_id_2 = generate_random_id();
+        let strategy_id_1 = Uuid::new_v4();
+        let strategy_id_2 = Uuid::new_v4();
 
         // Open positions for different strategies
         let position_1 = account
@@ -344,7 +356,7 @@ mod test {
 
         let position_3_id = position_3.id;
 
-        // Close one position to test if it doesn't appear in the strategy_open_positions
+        // Close one position to test if it doesn't appear in the strategy_positions
         account
             .close_position(position_1_id, 51000.0)
             .await
@@ -352,13 +364,13 @@ mod test {
 
         // Fetch open positions for each strategy
         let open_positions_strategy_1: Vec<PositionId> = account
-            .strategy_open_positions(strategy_id_1)
+            .strategy_positions(strategy_id_1)
             .iter()
             .map(|el| el.id)
             .collect();
 
         let open_positions_strategy_2: Vec<PositionId> = account
-            .strategy_open_positions(strategy_id_2)
+            .strategy_positions(strategy_id_2)
             .iter()
             .map(|el| el.id)
             .collect();

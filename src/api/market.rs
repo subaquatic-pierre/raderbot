@@ -143,15 +143,14 @@ async fn get_ticker_data(
     }
 }
 
-// #[get("/market-data")]
-// async fn get_market_data(app_data: web::Data<AppState>) -> impl Responder {
-//     let market = app_data.get_market().await;
+#[get("/info")]
+async fn market_info(app_data: web::Data<AppState>) -> impl Responder {
+    let market = app_data.get_market().await;
 
-//     let market_data = market.lock().await.market_data().await;
-//     // Return the stream data as JSON
-//     let json_data = json!({ "active_streams": market_data });
-//     HttpResponse::Ok().json(json_data)
-// }
+    let info = market.lock().await.info().await;
+    let json_data = json!({ "market_info": info });
+    HttpResponse::Ok().json(json_data)
+}
 
 #[get("/active-streams")]
 async fn active_streams(app_data: web::Data<AppState>) -> impl Responder {
@@ -245,7 +244,7 @@ pub fn register_market_service() -> Scope {
         .service(open_stream)
         .service(get_kline_data)
         .service(get_kline_data_range)
-        // .service(get_market_data)
+        .service(market_info)
         .service(active_streams)
         .service(get_ticker_data)
 }

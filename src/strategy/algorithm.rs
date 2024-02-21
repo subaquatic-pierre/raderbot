@@ -7,7 +7,7 @@ use crate::{
     account::trade::OrderSide,
     algorithm::{
         ma_crossover::EmaSmaCrossover, ma_simple::SimpleMovingAverage,
-        ma_three_crossover::ThreeMaCrossover,
+        ma_three_crossover::ThreeMaCrossover, rsi::Rsi,
     },
     market::{
         kline::{Kline, KlineData},
@@ -49,6 +49,14 @@ impl AlgorithmBuilder {
             }
             "ThreeMaCrossover" => {
                 let algo = ThreeMaCrossover::new(interval, algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "Rsi" => {
+                let algo = Rsi::new(interval, algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "RsiEmaSma" => {
+                let algo = Rsi::new(interval, algorithm_params)?;
                 Ok(Box::new(algo))
             }
             _ => Err(AlgorithmError::UnkownName(

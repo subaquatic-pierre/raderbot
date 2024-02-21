@@ -93,11 +93,11 @@ impl BackTest {
         self.signals.push(signal)
     }
 
-    pub fn calc_max_profit(&self, trade_txs: &Vec<TradeTx>) -> f64 {
+    pub fn calc_max_profit(&self, trades: &Vec<TradeTx>) -> f64 {
         let mut max_balance = 0.0;
         let mut current_balance = 0.0;
 
-        for trade_tx in trade_txs {
+        for trade_tx in trades {
             let profit = trade_tx.calc_profit();
             current_balance += profit;
 
@@ -109,11 +109,11 @@ impl BackTest {
         max_balance
     }
 
-    pub fn calc_max_drawdown(&self, trade_txs: &Vec<TradeTx>) -> f64 {
+    pub fn calc_max_drawdown(&self, trades: &Vec<TradeTx>) -> f64 {
         let mut min_balance = f64::MAX;
         let mut current_balance = 0.0;
 
-        for trade_tx in trade_txs {
+        for trade_tx in trades {
             let profit = trade_tx.calc_profit();
             current_balance += profit;
 
@@ -134,7 +134,7 @@ impl BackTest {
             .account
             .lock()
             .await
-            .open_positions()
+            .positions()
             .into_iter()
             .map(|item| (item.id, item.open_price))
             .collect();
@@ -149,21 +149,21 @@ impl BackTest {
         }
 
         // get all trade txs
-        let trade_txs: Vec<TradeTx> = self.account.lock().await.trade_txs();
+        let trades: Vec<TradeTx> = self.account.lock().await.trades();
 
-        let max_profit = self.calc_max_profit(&trade_txs);
-        let max_drawdown = self.calc_max_drawdown(&trade_txs);
+        let max_profit = self.calc_max_profit(&trades);
+        let max_drawdown = self.calc_max_drawdown(&trades);
 
-        let profit: f64 = trade_txs.iter().map(|trade| trade.calc_profit()).sum();
-        let long_count = trade_txs
+        let profit: f64 = trades.iter().map(|trade| trade.calc_profit()).sum();
+        let long_count = trades
             .iter()
             .filter(|trade| trade.position.order_side == OrderSide::Long)
             .count();
-        let short_count = trade_txs.len() - long_count;
+        let short_count = trades.len() - long_count;
 
         StrategyResult {
             profit,
-            // trade_txs,
+            // trades,
             long_count,
             short_count,
             // signals,

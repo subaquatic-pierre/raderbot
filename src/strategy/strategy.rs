@@ -2,22 +2,20 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::task::JoinHandle;
 use tokio::time;
+use uuid::Uuid;
 
-use crate::account::trade::TradeTx;
-use crate::utils::number::generate_random_id;
 use crate::{
     account::trade::OrderSide,
     market::{
         market::Market,
         types::{ArcMutex, ArcSender},
     },
-    strategy::algorithm::Algorithm,
+    strategy::algorithm::{Algorithm, AlgorithmBuilder},
 };
 
-use super::algorithm::AlgorithmBuilder;
 use super::types::{AlgorithmError, AlgorithmEvalResult, SignalMessage};
 
-pub type StrategyId = u32;
+pub type StrategyId = Uuid;
 
 pub struct Strategy {
     pub id: StrategyId,
@@ -44,7 +42,7 @@ impl Strategy {
             AlgorithmBuilder::build_algorithm(strategy_name, interval, algorithm_params)?;
 
         Ok(Self {
-            id: generate_random_id(),
+            id: Uuid::new_v4(),
             name: strategy_name.to_string(),
             market,
             interval: interval.to_string(),
@@ -107,12 +105,38 @@ impl Strategy {
         self.settings.clone()
     }
 
+    pub fn change_settings(&mut self, settings: StrategySettings) {
+        self.settings = settings;
+    }
+
     pub async fn get_algorithm_params(&self) -> Value {
         self.algorithm.lock().await.get_params().clone()
     }
+
     pub async fn set_algorithm_params(&self, params: Value) -> Result<(), AlgorithmError> {
         self.algorithm.lock().await.set_params(params)
     }
+
+    pub async fn info(&self) -> StrategyInfo {
+        StrategyInfo {
+            id: self.id,
+            name: self.name.clone(),
+            settings: self.settings.clone(),
+            params: self.algorithm.lock().await.get_params().clone(),
+            symbol: self.symbol.clone(),
+            interval: self.interval.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StrategyInfo {
+    pub id: StrategyId,
+    pub name: String,
+    pub symbol: String,
+    pub interval: String,
+    pub settings: StrategySettings,
+    pub params: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -135,7 +159,7 @@ impl Default for StrategySettings {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StrategyResult {
     pub profit: f64,
-    // pub trade_txs: Vec<TradeTx>,
+    // pub trades: Vec<TradeTx>,
     // pub signals: Vec<SignalMessage>,
     pub long_count: usize,
     pub short_count: usize,

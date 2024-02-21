@@ -16,7 +16,7 @@ pub struct CustomAlgorithm {
 
 impl CustomAlgorithm {
     pub fn new(interval: Duration, algorithm_params: Value) -> Result<Self, AlgorithmError> {
-        let custom_param = parse_usize_from_value("custom_param", algorithm_params.clone())
+        let custom_param = parse_usize_from_value("custom_param", &algorithm_params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
         Ok(Self {
             data_points: vec![],

@@ -119,15 +119,18 @@ async fn get_sign_hmac(_app_data: web::Data<AppState>, _req: HttpRequest) -> imp
 
 #[derive(Debug, Deserialize)]
 struct TimeDifParams {
-    from_ts: u64,
-    to_ts: u64,
+    from_ts: String,
+    to_ts: String,
 }
 #[post("/time-difference")]
 async fn time_difference(
     _app_data: web::Data<AppState>,
     body: Json<TimeDifParams>,
 ) -> impl Responder {
-    let difference = get_time_difference(body.from_ts, body.to_ts);
+    let difference = get_time_difference(
+        body.from_ts.parse::<u64>().unwrap(),
+        body.to_ts.parse::<u64>().unwrap(),
+    );
 
     // Return the stream data as JSON
     let json_data = json!({ "difference": difference });
@@ -135,14 +138,18 @@ async fn time_difference(
 }
 #[derive(Debug, Deserialize)]
 struct CalculateOpenTimeParams {
-    close_time: u64,
+    close_time: String,
     interval: String,
 }
-#[get("/calculate-open-time")]
-async fn calculate_open_time(_app_data: web::Data<AppState>, req: HttpRequest) -> impl Responder {
-    let params = web::Query::<CalculateOpenTimeParams>::from_query(req.query_string()).unwrap();
+#[post("/calculate-open-time")]
+async fn calculate_open_time(
+    _app_data: web::Data<AppState>,
+    body: Json<CalculateOpenTimeParams>,
+) -> impl Responder {
+    // let params = web::Query::<CalculateOpenTimeParams>::from_query(req.query_string()).unwrap();
 
-    let open_time = calculate_kline_open_time(params.close_time, &params.interval);
+    let open_time =
+        calculate_kline_open_time(body.close_time.parse::<u64>().unwrap(), &body.interval);
 
     // Return the stream data as JSON
     let json_data = json!({ "open_time": open_time });
