@@ -67,7 +67,7 @@ impl RaderBot {
 
         let market = ArcMutex::new(market);
 
-        let account = Account::new(market.clone(), exchange_api.clone(), true).await;
+        let account = Account::new(exchange_api.clone(), true).await;
 
         let account = ArcMutex::new(account);
 

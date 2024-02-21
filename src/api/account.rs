@@ -46,8 +46,9 @@ async fn open_position(app_data: web::Data<AppState>, body: Json<OpenPosParams>)
                 body.margin,
                 body.leverage,
                 body.order_side.clone(),
-                body.stop_loss,
                 last_price,
+                None,
+                body.stop_loss,
             )
             .await;
 

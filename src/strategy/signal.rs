@@ -74,8 +74,7 @@ impl SignalManager {
             // open position
             } else if active_positions.len() < settings.max_open_orders as usize {
                 if let Some(close_price) = trigger_price {
-                    if let Some(position) = self
-                        .account
+                    self.account
                         .lock()
                         .await
                         .open_position(
@@ -83,21 +82,18 @@ impl SignalManager {
                             settings.margin_usd,
                             settings.leverage,
                             signal.order_side.clone(),
-                            None,
                             close_price,
+                            Some(signal.strategy_id),
+                            None,
                         )
-                        .await
-                    {
-                        position.set_strategy_id(Some(signal.strategy_id))
-                    };
+                        .await;
                 }
             }
 
         // no open positions yet for given strategy
         } else {
             if let Some(last_price) = trigger_price {
-                if let Some(position) = self
-                    .account
+                self.account
                     .lock()
                     .await
                     .open_position(
@@ -105,13 +101,11 @@ impl SignalManager {
                         settings.margin_usd,
                         settings.leverage,
                         signal.order_side.clone(),
-                        None,
                         last_price,
+                        Some(signal.strategy_id),
+                        None,
                     )
-                    .await
-                {
-                    position.set_strategy_id(Some(signal.strategy_id))
-                };
+                    .await;
             }
         }
     }

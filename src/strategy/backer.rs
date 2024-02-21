@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::account::account::Account;
 use crate::account::trade::{OrderSide, Position, PositionId, TradeTx};
 use crate::exchange::api::ExchangeApi;
+use crate::exchange::mock::MockExchangeApi;
 use crate::exchange::stream::{StreamManager, StreamMeta};
 use crate::exchange::types::{ApiResult, StreamType};
 use crate::market::kline::{Kline, KlineData};
@@ -17,8 +18,6 @@ use crate::market::ticker::Ticker;
 use crate::market::types::ArcMutex;
 use crate::storage::manager::StorageManager;
 use crate::utils::channel::build_arc_channel;
-use crate::utils::number::generate_random_id;
-use crate::utils::time::generate_ts;
 
 use super::signal::SignalManager;
 use super::strategy::{Strategy, StrategyResult};
@@ -38,7 +37,7 @@ impl BackTest {
     pub async fn new(strategy: Strategy, initial_balance: Option<f64>) -> Self {
         let (_, market_rx) = build_arc_channel::<MarketMessage>();
         let exchange_api: Arc<Box<dyn ExchangeApi>> =
-            Arc::new(Box::new(BackTestExchangeApi::default()));
+            Arc::new(Box::new(MockExchangeApi::default()));
 
         let storage_manager = StorageManager::default();
 
@@ -47,8 +46,7 @@ impl BackTest {
         );
 
         // create new storage manager
-        let account =
-            ArcMutex::new(Account::new(market.clone(), exchange_api.clone(), false).await);
+        let account = ArcMutex::new(Account::new(exchange_api.clone(), false).await);
 
         let mut signal_manager = SignalManager::new(account.clone(), market.clone());
         signal_manager.add_strategy_settings(strategy.id, strategy.settings());
@@ -212,70 +210,5 @@ impl BackTest {
             max_drawdown,
             max_profit,
         }
-    }
-}
-
-pub struct BackTestExchangeApi {}
-
-#[async_trait]
-impl ExchangeApi for BackTestExchangeApi {
-    async fn open_position(
-        &self,
-        symbol: &str,
-        margin_usd: f64,
-        leverage: u32,
-        order_side: OrderSide,
-        open_price: f64,
-    ) -> ApiResult<Position> {
-        let position = Position::new(symbol, open_price, order_side, margin_usd, leverage, None);
-        Ok(position)
-    }
-    async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx> {
-        let trade_tx = TradeTx::new(close_price, generate_ts(), position);
-        Ok(trade_tx)
-    }
-
-    // ---
-    // All Other methods not used on this mock BackTestExchangeApi
-    // Will fail if called
-    // ---
-    async fn get_account(&self) -> ApiResult<Value> {
-        unimplemented!()
-    }
-    async fn get_account_balance(&self) -> ApiResult<f64> {
-        unimplemented!()
-    }
-    async fn all_orders(&self) -> ApiResult<Value> {
-        unimplemented!()
-    }
-    async fn list_open_orders(&self) -> ApiResult<Value> {
-        unimplemented!()
-    }
-    fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>> {
-        unimplemented!()
-    }
-    async fn get_kline(&self, _symbol: &str, _interval: &str) -> ApiResult<Kline> {
-        unimplemented!()
-    }
-    async fn get_ticker(&self, _symbol: &str) -> ApiResult<Ticker> {
-        unimplemented!()
-    }
-
-    async fn exchange_info(&self) -> ApiResult<Value> {
-        unimplemented!()
-    }
-    fn build_stream_url(
-        &self,
-        _symbol: &str,
-        _stream_type: StreamType,
-        _interval: Option<&str>,
-    ) -> String {
-        todo!()
-    }
-}
-
-impl Default for BackTestExchangeApi {
-    fn default() -> Self {
-        Self {}
     }
 }

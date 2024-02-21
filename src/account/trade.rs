@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 pub type PositionId = Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd, Copy)]
 pub enum OrderSide {
     Buy,
     Sell,
@@ -23,7 +23,7 @@ impl Display for OrderSide {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Position {
     pub id: PositionId,
     pub symbol: String,
@@ -96,5 +96,63 @@ impl TradeTx {
             OrderSide::Buy => total_close_usd - total_open_usd,
             OrderSide::Sell => total_open_usd - total_close_usd,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::utils::time::generate_ts;
+    use tokio::test;
+
+    #[test]
+    async fn test_position_new() {
+        let symbol = "BTCUSD";
+        let open_price = 50000.0;
+        let order_side = OrderSide::Buy;
+        let margin_usd = 1000.0;
+        let leverage = 10;
+        let stop_loss = Some(49000.0);
+
+        let position = Position::new(
+            symbol, open_price, order_side, margin_usd, leverage, stop_loss,
+        );
+
+        assert_eq!(position.symbol, symbol);
+        assert_eq!(position.open_price, open_price);
+        assert_eq!(position.order_side, order_side);
+        assert_eq!(position.margin_usd, margin_usd);
+        assert_eq!(position.leverage, leverage);
+        assert_eq!(position.stop_loss, stop_loss);
+
+        // Assert that quantity is calculated correctly
+        let expected_quantity = margin_usd * leverage as f64 / open_price;
+        assert_eq!(position.quantity, expected_quantity);
+
+        // Assert that other fields have default values
+        assert!(position.strategy_id.is_none());
+        assert!(position.open_time <= generate_ts());
+    }
+
+    #[test]
+    async fn test_trade_tx_new() {
+        let close_price = 51000.0;
+        let close_time = generate_ts();
+
+        let position = Position::new("BTCUSD", 50000.0, OrderSide::Buy, 1000.0, 10, Some(49000.0));
+
+        let trade_tx = TradeTx::new(close_price, close_time, position.clone());
+
+        assert_eq!(trade_tx.close_price, close_price);
+        assert_eq!(trade_tx.close_time, close_time);
+        assert_eq!(trade_tx.position, position);
+
+        // Assert that trade_tx has a unique ID
+        let another_trade_tx = TradeTx::new(52000.0, generate_ts(), position.clone());
+        assert_ne!(trade_tx.id, another_trade_tx.id);
+
+        // Assert that calc_profit calculates correctly
+        let expected_profit = (close_price - position.open_price) * position.quantity;
+        assert_eq!(trade_tx.calc_profit(), expected_profit);
     }
 }

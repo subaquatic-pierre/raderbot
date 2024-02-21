@@ -1,36 +1,23 @@
-use actix_web::rt::signal;
-use serde_json::Value;
 use std::collections::hash_map::Values;
-use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
-use tokio::time::sleep;
-use uuid::Uuid;
 
 use crate::strategy::strategy::StrategyId;
-use crate::utils::time::generate_ts;
 use crate::{
     account::trade::{OrderSide, Position},
     exchange::api::ExchangeApi,
-    market::{market::Market, types::ArcMutex},
 };
 
 use super::trade::{PositionId, TradeTx};
 
 pub struct Account {
-    market: ArcMutex<Market>,
     positions: HashMap<PositionId, Position>,
     trade_txs: Vec<TradeTx>,
     exchange_api: Arc<Box<dyn ExchangeApi>>,
 }
 
 impl Account {
-    pub async fn new(
-        market: ArcMutex<Market>,
-        exchange_api: Arc<Box<dyn ExchangeApi>>,
-        init_workers: bool,
-    ) -> Self {
+    pub async fn new(exchange_api: Arc<Box<dyn ExchangeApi>>, init_workers: bool) -> Self {
         let _self = Self {
-            market,
             exchange_api,
             positions: HashMap::new(),
             trade_txs: vec![],
@@ -48,8 +35,9 @@ impl Account {
         margin_usd: f64,
         leverage: u32,
         order_side: OrderSide,
-        stop_loss: Option<f64>,
         open_price: f64,
+        strategy_id: Option<StrategyId>,
+        stop_loss: Option<f64>,
     ) -> Option<&mut Position> {
         if let Ok(mut position) = self
             .exchange_api
@@ -57,6 +45,7 @@ impl Account {
             .await
         {
             position.set_stop_loss(stop_loss);
+            position.set_strategy_id(strategy_id);
             let position_id = position.id;
             // insert new position into account positions
             self.positions.insert(position.id, position);
@@ -118,41 +107,172 @@ impl Account {
     // ---
 
     async fn init(&self) {
-        // monitor positions stop loss
-        // self.init_stop_loss_monitor().await
+        // start any worker threads for account
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::utils::number::generate_random_id;
+    use crate::{
+        account::trade::OrderSide,
+        exchange::{api::ExchangeApi, mock::MockExchangeApi},
+    };
+    use tokio::test;
+
+    #[test]
+    async fn test_open_position() {
+        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let mut account = Account::new(exchange_api.clone(), false).await;
+
+        // Open a position
+        let position = account
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(position.symbol, "BTCUSD");
+        assert_eq!(position.margin_usd, 1000.0);
+        assert_eq!(position.leverage, 10);
+        assert_eq!(position.order_side, OrderSide::Buy);
+
+        assert_eq!(account.positions.len(), 1);
+        // Close the opened position
+        // let trade_tx = account.close_position(position.id, 55000.0).await.unwrap();
+
+        // assert_eq!(trade_tx.close_price, 55000.0);
+
+        // // Ensure the positions and trade transactions are updated accordingly
+        // assert_eq!(account.trade_txs.len(), 1);
+        // assert_eq!(account.trade_txs[0].id, trade_tx.id);
     }
 
-    // async fn init_stop_loss_monitor(&self) {
-    //     let market = self.market.clone();
-    //     let positions = self.positions.clone();
+    #[test]
+    async fn test_close_position() {
+        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let mut account = Account::new(exchange_api.clone(), false).await;
 
-    //     tokio::spawn(async move {
-    //         loop {
-    //             for (_id, position) in positions.lock().await.iter() {
-    //                 // get last price from position
+        // Open a position
+        let position = account
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
+            .await
+            .unwrap();
 
-    //                 if let Some(last_price) = market
-    //                     .lock()
-    //                     .await
-    //                     .last_price(&position.symbol.to_string())
-    //                     .await
-    //                 {
-    //                     if let Some(stop_loss) = position.stop_loss {
-    //                         if last_price < stop_loss {
-    //                             // TODO: close position if stop loss hit
-    //                             println!("Stop loss hit")
-    //                         }
-    //                     }
-    //                 }
+        let position = position.clone();
 
-    //                 // get last price from position
+        let trade_tx = account.close_position(position.id, 55000.0).await.unwrap();
+        let trade_tx = trade_tx.clone();
 
-    //                 // check if
-    //             }
+        assert_eq!(trade_tx.close_price, 55000.0);
+        assert_eq!(account.positions.len(), 0);
+        assert_eq!(account.trade_txs.len(), 1);
+        assert_eq!(account.trade_txs[0].id, trade_tx.id);
+        // Close the opened position
 
-    //             // only check stop loss hit every 1min
-    //             sleep(Duration::from_secs(60)).await;
-    //         }
-    //     });
-    // }
+        // // Ensure the positions and trade transactions are updated accordingly
+    }
+
+    #[test]
+    async fn test_open_positions() {
+        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let mut account = Account::new(exchange_api.clone(), false).await;
+
+        // Open a position
+        account
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
+            .await
+            .unwrap();
+
+        // Check the open positions
+        let open_positions = account.open_positions().collect::<Vec<_>>();
+
+        assert_eq!(open_positions.len(), 1);
+        assert_eq!(open_positions[0].symbol, "BTCUSD");
+        assert_eq!(open_positions[0].margin_usd, 1000.0);
+        assert_eq!(open_positions[0].leverage, 10);
+        assert_eq!(open_positions[0].order_side, OrderSide::Buy);
+    }
+
+    #[test]
+    async fn test_strategy_open_positions() {
+        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let mut account = Account::new(exchange_api.clone(), false).await;
+
+        let strategy_id_1 = generate_random_id();
+        let strategy_id_2 = generate_random_id();
+
+        // Open positions for different strategies
+        let position_1 = account
+            .open_position(
+                "BTCUSD",
+                1000.0,
+                10,
+                OrderSide::Buy,
+                50000.0,
+                Some(strategy_id_1),
+                None,
+            )
+            .await
+            .unwrap();
+        let position_1_id = position_1.id;
+
+        let position_2 = account
+            .open_position(
+                "ETHUSD",
+                500.0,
+                5,
+                OrderSide::Sell,
+                2000.0,
+                Some(strategy_id_1),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let position_2_id = position_2.id;
+
+        let position_3 = account
+            .open_position(
+                "BTCUSD",
+                200.0,
+                2,
+                OrderSide::Buy,
+                48000.0,
+                Some(strategy_id_2),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let position_3_id = position_3.id;
+
+        // Close one position to test if it doesn't appear in the strategy_open_positions
+        account
+            .close_position(position_1_id, 51000.0)
+            .await
+            .unwrap();
+
+        // Fetch open positions for each strategy
+        let open_positions_strategy_1: Vec<PositionId> = account
+            .strategy_open_positions(strategy_id_1)
+            .iter()
+            .map(|el| el.id)
+            .collect();
+
+        let open_positions_strategy_2: Vec<PositionId> = account
+            .strategy_open_positions(strategy_id_2)
+            .iter()
+            .map(|el| el.id)
+            .collect();
+
+        // Assert that open positions match the expected count for each strategy
+        assert_eq!(open_positions_strategy_1.len(), 1);
+        assert_eq!(open_positions_strategy_2.len(), 1);
+
+        // // Assert that the closed position is not in the open positions for strategy 1
+        assert!(!open_positions_strategy_1.contains(&position_1_id));
+        assert!(open_positions_strategy_1.contains(&position_2_id));
+        assert!(open_positions_strategy_2.contains(&position_3_id));
+    }
 }
