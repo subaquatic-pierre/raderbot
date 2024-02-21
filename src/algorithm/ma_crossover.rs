@@ -14,7 +14,7 @@ use ta::Next;
 
 // Assume the existence of the Kline struct and other necessary dependencies
 
-pub struct MovingAverageCrossover {
+pub struct EmaSmaCrossover {
     data_points: Vec<Kline>,
     interval: Duration,
     ema_period: usize,
@@ -23,7 +23,7 @@ pub struct MovingAverageCrossover {
     sma: SimpleMovingAverage,
 }
 
-impl MovingAverageCrossover {
+impl EmaSmaCrossover {
     pub fn new(interval: Duration, algorithm_params: Value) -> Result<Self, AlgorithmError> {
         let ema_period = parse_usize_from_value("ema_period", algorithm_params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
@@ -54,7 +54,7 @@ impl MovingAverageCrossover {
     }
 }
 
-impl Algorithm for MovingAverageCrossover {
+impl Algorithm for EmaSmaCrossover {
     fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
         self.data_points.push(kline.clone());
 
@@ -85,7 +85,6 @@ impl Algorithm for MovingAverageCrossover {
     }
 
     fn interval(&self) -> Duration {
-        // Set your desired interval
         self.interval
     }
 

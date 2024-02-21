@@ -101,11 +101,35 @@ impl BackTest {
     }
 
     pub fn calc_max_profit(&self, trade_txs: &Vec<TradeTx>) -> f64 {
-        0.0
+        let mut max_balance = 0.0;
+        let mut current_balance = 0.0;
+
+        for trade_tx in trade_txs {
+            let profit = trade_tx.calc_profit();
+            current_balance += profit;
+
+            if current_balance > max_balance {
+                max_balance = current_balance;
+            }
+        }
+
+        max_balance
     }
 
     pub fn calc_max_drawdown(&self, trade_txs: &Vec<TradeTx>) -> f64 {
-        0.0
+        let mut min_balance = f64::MAX;
+        let mut current_balance = 0.0;
+
+        for trade_tx in trade_txs {
+            let profit = trade_tx.calc_profit();
+            current_balance += profit;
+
+            if current_balance < min_balance {
+                min_balance = current_balance;
+            }
+        }
+
+        min_balance
     }
 
     pub async fn result(&mut self) -> StrategyResult {
@@ -122,6 +146,8 @@ impl BackTest {
             .map(|item| (item.id, item.open_price))
             .collect();
 
+        info!("Before Close Remaining, {active_positions:?}");
+
         // close any remaining positions
         for (id, open_price) in active_positions {
             self.account
@@ -131,11 +157,22 @@ impl BackTest {
                 .await;
         }
 
+        let active_positions: Vec<(PositionId, f64)> = self
+            .account
+            .lock()
+            .await
+            .open_positions()
+            .into_iter()
+            .map(|item| (item.id, item.open_price))
+            .collect();
+
+        info!("After Close Remaining, {active_positions:?}");
+
         // get all trade txs
         let trade_txs: Vec<TradeTx> = self.account.lock().await.trade_txs();
 
         let max_profit = self.calc_max_profit(&trade_txs);
-        let max_drawdown = self.calc_max_profit(&trade_txs);
+        let max_drawdown = self.calc_max_drawdown(&trade_txs);
 
         let profit: f64 = trade_txs.iter().map(|trade| trade.calc_profit()).sum();
         let buy_count = trade_txs
@@ -161,16 +198,14 @@ impl BackTest {
             .map(|item| (item.id, item.open_price))
             .collect();
 
-        info!("Remaining Open Positions: {:?}", active_positions);
-
         StrategyResult {
             profit,
             trade_txs,
             buy_count,
             sell_count,
             // signals,
-            buy_signal_count,
-            sell_signal_count,
+            // // buy_signal_count,
+            // sell_signal_count,
             symbol: self.strategy.symbol.to_string(),
             period_end_price: self.period_end_price,
             period_start_price: self.period_start_price,
@@ -180,9 +215,7 @@ impl BackTest {
     }
 }
 
-pub struct BackTestExchangeApi {
-    // positions: HashMap<PositionId, Position>,
-}
+pub struct BackTestExchangeApi {}
 
 #[async_trait]
 impl ExchangeApi for BackTestExchangeApi {

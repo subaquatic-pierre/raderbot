@@ -4,7 +4,6 @@ use std::collections::HashMap;
 
 use crate::exchange::types::ApiError;
 use crate::exchange::types::ApiResult;
-use crate::strategy::types::AlgorithmError;
 
 use serde_json::Value;
 

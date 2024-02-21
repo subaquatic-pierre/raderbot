@@ -5,7 +5,10 @@ use serde_json::Value;
 
 use crate::{
     account::trade::OrderSide,
-    algorithm::ma_crossover::MovingAverageCrossover,
+    algorithm::{
+        ma_crossover::EmaSmaCrossover, ma_simple::SimpleMovingAverage,
+        ma_three_crossover::ThreeMaCrossover,
+    },
     market::{
         kline::{Kline, KlineData},
         ticker::TickerData,
@@ -35,8 +38,16 @@ impl AlgorithmBuilder {
             Err(e) => return Err(AlgorithmError::UnknownInterval(e.to_string())),
         };
         match algorithm_name {
-            "MovingAverageCrossover" => {
-                let algo = MovingAverageCrossover::new(interval, algorithm_params)?;
+            "EmaSmaCrossover" => {
+                let algo = EmaSmaCrossover::new(interval, algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "SimpleMovingAverage" => {
+                let algo = SimpleMovingAverage::new(interval, algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "ThreeMaCrossover" => {
+                let algo = ThreeMaCrossover::new(interval, algorithm_params)?;
                 Ok(Box::new(algo))
             }
             _ => Err(AlgorithmError::UnkownName(

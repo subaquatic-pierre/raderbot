@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 
 use crate::bot::AppState;
 use crate::strategy::strategy::StrategySettings;
+use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]
 pub struct NewStrategyParams {
@@ -110,8 +111,8 @@ pub struct RunBackTestParams {
     interval: String,
     margin: Option<f64>,
     leverage: Option<u32>,
-    from_ts: u64,
-    to_ts: u64,
+    from_ts: String,
+    to_ts: String,
 }
 #[post("/run-back-test")]
 async fn run_back_test(
@@ -125,6 +126,17 @@ async fn run_back_test(
         leverage: body.leverage.unwrap_or_else(|| 10),
     };
 
+    let from_ts = string_to_timestamp(&body.from_ts);
+    let to_ts = string_to_timestamp(&body.to_ts);
+    if from_ts.is_err() || to_ts.is_err() {
+        let json_data = json!({ "error": "Unable to parse dates".to_string()});
+        return HttpResponse::ExpectationFailed().json(json_data);
+    }
+
+    // SAFETY: Error check above
+    let from_ts = from_ts.unwrap();
+    let to_ts = to_ts.unwrap();
+
     let result = bot
         .lock()
         .await
@@ -132,8 +144,8 @@ async fn run_back_test(
             &body.strategy_name,
             &body.symbol,
             &body.interval,
-            body.from_ts,
-            body.to_ts,
+            from_ts,
+            to_ts,
             settings,
             body.algorithm_params.clone(),
         )

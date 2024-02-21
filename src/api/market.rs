@@ -12,6 +12,7 @@ use serde_json::json;
 use crate::exchange::types::StreamType;
 
 use crate::bot::AppState;
+use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]
 pub struct GetKlineDataParams {
@@ -46,8 +47,8 @@ async fn get_kline_data(
 pub struct GetKlineDataRangeParams {
     symbol: String,
     interval: String,
-    from_ts: Option<u64>,
-    to_ts: Option<u64>,
+    from_ts: Option<String>,
+    to_ts: Option<String>,
     limit: Option<usize>,
 }
 #[post("/kline-data-range")]
@@ -57,16 +58,33 @@ async fn get_kline_data_range(
 ) -> impl Responder {
     let market = app_data.get_market().await;
 
+    let mut from_ts: Option<u64> = None;
+    let mut to_ts: Option<u64> = None;
+
+    if let Some(ts) = &body.to_ts {
+        let _ts = string_to_timestamp(ts);
+        if _ts.is_err() {
+            let json_data = json!({ "error": "Unable to parse dates".to_string()});
+            return HttpResponse::ExpectationFailed().json(json_data);
+        }
+        let _ts = _ts.unwrap();
+        to_ts = Some(_ts);
+    };
+
+    if let Some(ts) = &body.from_ts {
+        let _ts = string_to_timestamp(ts);
+        if _ts.is_err() {
+            let json_data = json!({ "error": "Unable to parse dates".to_string()});
+            return HttpResponse::ExpectationFailed().json(json_data);
+        }
+        let _ts = _ts.unwrap();
+        from_ts = Some(_ts);
+    };
+
     let kline_data = market
         .lock()
         .await
-        .kline_data_range(
-            &body.symbol,
-            &body.interval,
-            body.from_ts,
-            body.to_ts,
-            body.limit,
-        )
+        .kline_data_range(&body.symbol, &body.interval, from_ts, to_ts, body.limit)
         .await;
 
     if let Some(kline_data) = kline_data {
