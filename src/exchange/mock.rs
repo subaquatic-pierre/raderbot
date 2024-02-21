@@ -9,6 +9,8 @@ use crate::utils::time::generate_ts;
 use async_trait::async_trait;
 use serde_json::Value;
 
+use super::api::ExchangeInfo;
+
 pub struct MockExchangeApi {}
 
 #[async_trait]
@@ -27,6 +29,12 @@ impl ExchangeApi for MockExchangeApi {
     async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx> {
         let trade_tx = TradeTx::new(close_price, generate_ts(), position);
         Ok(trade_tx)
+    }
+
+    async fn info(&self) -> ApiResult<ExchangeInfo> {
+        Ok(ExchangeInfo {
+            name: "Mock".to_string(),
+        })
     }
 
     // ---
@@ -55,9 +63,6 @@ impl ExchangeApi for MockExchangeApi {
         unimplemented!()
     }
 
-    async fn exchange_info(&self) -> ApiResult<Value> {
-        unimplemented!()
-    }
     fn build_stream_url(
         &self,
         _symbol: &str,

@@ -42,7 +42,7 @@ impl BackTest {
         );
 
         // create new storage manager
-        let account = ArcMutex::new(Account::new(exchange_api.clone(), false).await);
+        let account = ArcMutex::new(Account::new(exchange_api.clone(), false, true).await);
 
         let mut signal_manager = SignalManager::new(account.clone(), market.clone());
         signal_manager.add_strategy_settings(strategy.id, strategy.settings());

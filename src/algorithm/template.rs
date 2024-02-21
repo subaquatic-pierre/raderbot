@@ -52,7 +52,30 @@ impl Algorithm for CustomAlgorithm {
         self.interval
     }
 
-    fn strategy_name(&self) -> String {
-        format!("CustomAlgorithm({})", self.custom_param)
+    fn get_params(&self) -> &Value {
+        unimplemented!()
+    }
+
+    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+        unimplemented!()
     }
 }
+
+// pub enum AlgorithmEvalResult {
+//     Long,
+//     Short,
+//     Ignore,
+// }
+
+// #[derive(Serialize, Deserialize, Debug, Clone)]
+// pub struct Kline {
+//     pub symbol: String,
+//     pub interval: String,
+//     pub open: f64,
+//     pub high: f64,
+//     pub low: f64,
+//     pub close: f64,
+//     pub volume: f64,
+//     pub open_time: u64,
+//     pub close_time: u64,
+// }

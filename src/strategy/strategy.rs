@@ -22,6 +22,7 @@ pub type StrategyId = u32;
 pub struct Strategy {
     pub id: StrategyId,
     pub symbol: String,
+    pub name: String,
     interval: String,
     market: ArcMutex<Market>,
     strategy_tx: ArcSender<SignalMessage>,
@@ -44,6 +45,7 @@ impl Strategy {
 
         Ok(Self {
             id: generate_random_id(),
+            name: strategy_name.to_string(),
             market,
             interval: interval.to_string(),
             symbol: symbol.to_string(),
@@ -103,6 +105,13 @@ impl Strategy {
 
     pub fn settings(&self) -> StrategySettings {
         self.settings.clone()
+    }
+
+    pub async fn get_algorithm_params(&self) -> Value {
+        self.algorithm.lock().await.get_params().clone()
+    }
+    pub async fn set_algorithm_params(&self, params: Value) -> Result<(), AlgorithmError> {
+        self.algorithm.lock().await.set_params(params)
     }
 }
 

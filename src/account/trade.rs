@@ -2,7 +2,10 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{strategy::strategy::StrategyId, utils::time::generate_ts};
+use crate::{
+    strategy::strategy::StrategyId,
+    utils::time::{generate_ts, timestamp_to_string},
+};
 
 use uuid::Uuid;
 
@@ -28,7 +31,7 @@ pub struct Position {
     pub id: PositionId,
     pub symbol: String,
     pub order_side: OrderSide,
-    pub open_time: u64,
+    pub open_time: String,
     pub open_price: f64,
     pub quantity: f64,
     pub margin_usd: f64,
@@ -59,7 +62,7 @@ impl Position {
             margin_usd,
             leverage,
             strategy_id: None,
-            open_time: generate_ts(),
+            open_time: timestamp_to_string(generate_ts()),
         }
     }
 
@@ -74,7 +77,7 @@ impl Position {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TradeTx {
     pub id: Uuid,
-    pub close_time: u64,
+    pub close_time: String,
     pub close_price: f64,
     pub position: Position,
 }
@@ -84,7 +87,7 @@ impl TradeTx {
         Self {
             id: Uuid::new_v4(),
             close_price,
-            close_time,
+            close_time: timestamp_to_string(close_time),
             position,
         }
     }
@@ -102,7 +105,7 @@ impl TradeTx {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::time::generate_ts;
+    use crate::utils::time::{generate_ts, string_to_timestamp};
     use tokio::test;
 
     #[test]
@@ -131,7 +134,7 @@ mod test {
 
         // Assert that other fields have default values
         assert!(position.strategy_id.is_none());
-        assert!(position.open_time <= generate_ts());
+        assert!(string_to_timestamp(&position.open_time).unwrap() <= generate_ts());
     }
 
     #[test]
@@ -151,7 +154,7 @@ mod test {
         let trade_tx = TradeTx::new(close_price, close_time, position.clone());
 
         assert_eq!(trade_tx.close_price, close_price);
-        assert_eq!(trade_tx.close_time, close_time);
+        assert_eq!(trade_tx.close_time, timestamp_to_string(close_time));
         assert_eq!(trade_tx.position, position);
 
         // Assert that trade_tx has a unique ID

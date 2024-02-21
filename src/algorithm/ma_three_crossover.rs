@@ -14,15 +14,16 @@ pub struct ThreeMaCrossover {
     short_period: usize,
     medium_period: usize,
     long_period: usize,
+    params: Value,
 }
 
 impl ThreeMaCrossover {
-    pub fn new(interval: Duration, algorithm_params: Value) -> Result<Self, AlgorithmError> {
-        let short_period = parse_usize_from_value("short_period", algorithm_params.clone())
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+        let short_period = parse_usize_from_value("short_period", params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let medium_period = parse_usize_from_value("medium_period", algorithm_params.clone())
+        let medium_period = parse_usize_from_value("medium_period", params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let long_period = parse_usize_from_value("long_period", algorithm_params.clone())
+        let long_period = parse_usize_from_value("long_period", params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
 
         Ok(Self {
@@ -31,6 +32,7 @@ impl ThreeMaCrossover {
             short_period,
             medium_period,
             long_period,
+            params,
         })
     }
 
@@ -93,10 +95,23 @@ impl Algorithm for ThreeMaCrossover {
         self.interval
     }
 
-    fn strategy_name(&self) -> String {
-        format!(
-            "MovingAverageCrossover({}, {}, {})",
-            self.short_period, self.medium_period, self.long_period
-        )
+    fn get_params(&self) -> &Value {
+        &self.params
+    }
+
+    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+        let short_period = parse_usize_from_value("short_period", params.clone())
+            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+        let medium_period = parse_usize_from_value("medium_period", params.clone())
+            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+        let long_period = parse_usize_from_value("long_period", params.clone())
+            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+
+        self.params = params;
+        self.long_period = long_period;
+        self.short_period = short_period;
+        self.medium_period = medium_period;
+
+        Ok(())
     }
 }

@@ -12,13 +12,10 @@ use serde_json::json;
 use crate::bot::AppState;
 
 #[get("/info")]
-async fn exchange_info(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
+async fn info(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
     let exchange = app_data.get_exchange_api().await;
 
-    let data = exchange
-        .exchange_info()
-        .await
-        .expect("Unable to get exchange info");
+    let data = exchange.info().await.expect("Unable to get exchange info");
 
     // Return the stream data as JSON
     HttpResponse::Ok().json(data)
@@ -96,7 +93,7 @@ async fn get_ticker(app_data: web::Data<AppState>, body: Json<GetTickerParams>) 
 
 pub fn register_exchange_service() -> Scope {
     scope("/exchange")
-        .service(exchange_info)
+        .service(info)
         .service(get_kline)
         .service(get_ticker)
         .service(list_list_open_orders)

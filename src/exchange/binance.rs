@@ -23,6 +23,7 @@ use crate::market::types::{ArcMutex, ArcSender};
 use crate::market::{kline::Kline, ticker::Ticker};
 use crate::utils::time::generate_ts;
 
+use super::api::ExchangeInfo;
 use super::stream::build_stream_id;
 use super::stream::{StreamManager, StreamMeta};
 use super::types::{ApiResult, StreamType};
@@ -282,12 +283,16 @@ impl ExchangeApi for BinanceApi {
     // ---
     // Exchange Methods
     // ---
-    async fn exchange_info(&self) -> ApiResult<Value> {
+    async fn info(&self) -> ApiResult<ExchangeInfo> {
         let endpoint = "/api/v3/exchangeInfo";
 
         let res = self.get(endpoint, None).await?;
 
-        self.handle_response(res).await
+        // self.handle_response(res).await
+
+        Ok(ExchangeInfo {
+            name: "Binance".to_string(),
+        })
     }
 
     // ---

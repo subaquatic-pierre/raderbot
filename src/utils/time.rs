@@ -49,11 +49,11 @@ pub fn string_to_timestamp(date_str: &str) -> Result<u64, &'static str> {
     Err("Unable to parse date string")
 }
 
-pub fn _timestamp_to_string(ts: u64) -> Result<String, &'static str> {
+pub fn timestamp_to_string(ts: u64) -> String {
     let datetime = timestamp_to_datetime(ts);
     let timestamp_str = datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string();
 
-    Ok(timestamp_str)
+    timestamp_str
 }
 
 pub fn year_month_day_to_ts(year: u32, month: u32, day: u32) -> Option<u64> {
@@ -158,10 +158,9 @@ mod tests {
         let ts = 1640995200000;
         let str = "2022-01-01T00:00:00Z";
 
-        let result = _timestamp_to_string(ts);
+        let result = timestamp_to_string(ts);
 
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), str);
+        assert_eq!(result, str);
     }
 
     #[test]

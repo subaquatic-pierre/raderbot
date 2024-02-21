@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::bot::AppState;
-use crate::strategy::strategy::StrategySettings;
+use crate::strategy::strategy::{StrategyId, StrategySettings};
 use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]
@@ -78,10 +78,10 @@ async fn stop_strategy(
 }
 
 #[get("/active-strategies")]
-async fn get_strategies(app_data: web::Data<AppState>) -> impl Responder {
+async fn get_strategy_ids(app_data: web::Data<AppState>) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let strategies = bot.lock().await.get_strategies().await;
+    let strategies = bot.lock().await.get_strategy_ids();
 
     let json_data = json!({ "strategies": strategies });
 
@@ -92,7 +92,7 @@ async fn get_strategies(app_data: web::Data<AppState>) -> impl Responder {
 async fn stop_all_strategies(app_data: web::Data<AppState>) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let strategies = bot.lock().await.get_strategies().await;
+    let strategies = bot.lock().await.get_strategy_ids();
 
     for id in &strategies {
         bot.lock().await.stop_strategy(*id).await;
@@ -101,6 +101,31 @@ async fn stop_all_strategies(app_data: web::Data<AppState>) -> impl Responder {
     let json_data = json!({ "strategies_stopped": strategies });
 
     HttpResponse::Ok().json(json_data)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetStrategyParams {
+    strategy_id: StrategyId,
+    params: Value,
+}
+#[post("/set-strategy-params")]
+async fn set_strategy_params(
+    app_data: web::Data<AppState>,
+    body: Json<SetStrategyParams>,
+) -> impl Responder {
+    if let Some(strategy) = app_data.bot.lock().await.get_strategy(body.strategy_id) {
+        if let Err(err) = strategy.set_algorithm_params(body.params.clone()).await {
+            let json_data = json!({ "error": err.to_string() });
+            HttpResponse::Ok().json(json_data)
+        } else {
+            let updated_params = strategy.get_algorithm_params().await;
+            let json_data = json!({ "success": { "updated_params": updated_params } });
+            HttpResponse::Ok().json(json_data)
+        }
+    } else {
+        let json_data = json!({ "error": "Unable to find strategy" });
+        HttpResponse::Ok().json(json_data)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -168,7 +193,8 @@ pub fn register_strategy_service() -> Scope {
     scope("/strategy")
         .service(new_strategy)
         .service(stop_strategy)
-        .service(get_strategies)
+        .service(get_strategy_ids)
         .service(stop_all_strategies)
+        .service(set_strategy_params)
         .service(run_back_test)
 }

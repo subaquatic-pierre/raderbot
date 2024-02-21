@@ -12,16 +12,18 @@ pub struct SimpleMovingAverage {
     data_points: Vec<Kline>,
     interval: Duration,
     period: usize,
+    params: Value,
 }
 
 impl SimpleMovingAverage {
-    pub fn new(interval: Duration, algorithm_params: Value) -> Result<Self, AlgorithmError> {
-        let period = parse_usize_from_value("sma_period", algorithm_params.clone())
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+        let period = parse_usize_from_value("sma_period", params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
         Ok(Self {
             data_points: vec![],
             interval,
             period,
+            params,
         })
     }
 
@@ -68,7 +70,16 @@ impl Algorithm for SimpleMovingAverage {
         self.interval
     }
 
-    fn strategy_name(&self) -> String {
-        format!("SimpleMovingAverage({})", self.period)
+    fn get_params(&self) -> &Value {
+        &self.params
+    }
+
+    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+        let period = parse_usize_from_value("sma_period", params.clone())
+            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+
+        self.period = period;
+        self.params = params;
+        Ok(())
     }
 }

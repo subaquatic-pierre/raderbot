@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use reqwest::{header::HeaderMap, Response};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use std::{error::Error, fmt};
@@ -57,7 +58,7 @@ pub trait ExchangeApi: Send + Sync {
     // ---
     async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline>;
     async fn get_ticker(&self, symbol: &str) -> ApiResult<Ticker>;
-    async fn exchange_info(&self) -> ApiResult<Value>;
+    async fn info(&self) -> ApiResult<ExchangeInfo>;
 
     fn build_stream_url(
         &self,
@@ -91,4 +92,9 @@ impl<'a> ToString for QueryStr<'a> {
         query_str.pop();
         query_str
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ExchangeInfo {
+    pub name: String,
 }

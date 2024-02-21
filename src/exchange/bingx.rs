@@ -26,6 +26,7 @@ use crate::market::{kline::Kline, ticker::Ticker};
 
 use crate::utils::time::generate_ts;
 
+use super::api::ExchangeInfo;
 use super::stream::build_stream_id;
 use super::stream::{StreamManager, StreamMeta};
 use super::types::{ApiResult, StreamType};
@@ -259,14 +260,17 @@ impl ExchangeApi for BingXApi {
     // ---
     // Exchange Methods
     // ---
-    async fn exchange_info(&self) -> ApiResult<Value> {
+    async fn info(&self) -> ApiResult<ExchangeInfo> {
         let endpoint = "/api/v3/exchangeInfo";
 
         let res = self.get(endpoint, None).await?;
 
-        self.handle_response(res).await
-    }
+        // self.handle_response(res).await
 
+        Ok(ExchangeInfo {
+            name: "BingX".to_string(),
+        })
+    }
     // ---
     // Stream Helper methods
     // ---

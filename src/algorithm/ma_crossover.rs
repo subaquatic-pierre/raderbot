@@ -21,13 +21,14 @@ pub struct EmaSmaCrossover {
     sma_period: usize,
     ema: ExponentialMovingAverage,
     sma: SimpleMovingAverage,
+    params: Value,
 }
 
 impl EmaSmaCrossover {
-    pub fn new(interval: Duration, algorithm_params: Value) -> Result<Self, AlgorithmError> {
-        let ema_period = parse_usize_from_value("ema_period", algorithm_params.clone())
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+        let ema_period = parse_usize_from_value("ema_period", params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
-        let sma_period = parse_usize_from_value("sma_period", algorithm_params.clone())
+        let sma_period = parse_usize_from_value("sma_period", params.clone())
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
 
         let ema = ExponentialMovingAverage::new(ema_period)
@@ -42,6 +43,7 @@ impl EmaSmaCrossover {
             sma_period,
             ema,
             sma,
+            params,
         })
     }
 
@@ -88,10 +90,27 @@ impl Algorithm for EmaSmaCrossover {
         self.interval
     }
 
-    fn strategy_name(&self) -> String {
-        format!(
-            "MovingAverageCrossover(EMA:{}, SMA:{})",
-            self.ema_period, self.sma_period
-        )
+    fn get_params(&self) -> &Value {
+        &self.params
+    }
+
+    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+        let ema_period = parse_usize_from_value("ema_period", params.clone())
+            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+        let sma_period = parse_usize_from_value("sma_period", params.clone())
+            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+
+        let ema = ExponentialMovingAverage::new(ema_period)
+            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+        let sma = SimpleMovingAverage::new(sma_period)
+            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+
+        self.params = params;
+        self.ema = ema;
+        self.sma = sma;
+        self.ema_period = ema_period;
+        self.sma_period = sma_period;
+
+        Ok(())
     }
 }

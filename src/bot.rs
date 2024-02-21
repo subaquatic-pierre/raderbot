@@ -7,7 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     account::account::Account,
-    exchange::{api::ExchangeApi, bingx::BingXApi},
+    exchange::{api::ExchangeApi, bingx::BingXApi, mock::MockExchangeApi},
     market::{
         market::Market,
         messages::MarketMessage,
@@ -23,9 +23,7 @@ use crate::{
     utils::channel::build_arc_channel,
 };
 
-use tokio::task::{AbortHandle, JoinHandle};
-
-use crate::Message;
+use tokio::task::JoinHandle;
 
 pub struct RaderBot {
     pub market: ArcMutex<Market>,
@@ -43,6 +41,7 @@ impl RaderBot {
         // create new Arc of exchange API
         let api_key = dotenv!("BINANCE_API_KEY");
         let secret_key = dotenv!("BINANCE_SECRET_KEY");
+        let dry_run = dotenv!("DRY_RUN");
 
         // create new channel for stream handler and market to communicate
         let (market_tx, market_rx) = build_arc_channel::<MarketMessage>();
@@ -67,7 +66,14 @@ impl RaderBot {
 
         let market = ArcMutex::new(market);
 
-        let account = Account::new(exchange_api.clone(), true).await;
+        let (account_exchange_api, dry_run) = if dry_run == "True" {
+            let api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+            (api, true)
+        } else {
+            (exchange_api.clone(), false)
+        };
+
+        let account = Account::new(account_exchange_api, true, dry_run).await;
 
         let account = ArcMutex::new(account);
 
@@ -141,13 +147,17 @@ impl RaderBot {
         strategy_id.to_string()
     }
 
-    pub async fn get_strategies(&mut self) -> Vec<u32> {
+    pub fn get_strategy_ids(&mut self) -> Vec<StrategyId> {
         let mut strategies = vec![];
         for (strategy_id, _strategy) in self.strategies.iter() {
             strategies.push(*strategy_id)
         }
 
         strategies
+    }
+
+    pub fn get_strategy(&mut self, strategy_id: StrategyId) -> Option<&mut Strategy> {
+        self.strategies.get_mut(&strategy_id)
     }
 
     pub async fn run_back_test(

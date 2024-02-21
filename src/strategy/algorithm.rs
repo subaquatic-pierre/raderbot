@@ -22,7 +22,8 @@ pub trait Algorithm: Send + Sync {
     fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult;
     fn data_points(&self) -> Vec<Kline>;
     fn interval(&self) -> Duration;
-    fn strategy_name(&self) -> String;
+    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError>;
+    fn get_params(&self) -> &Value;
 }
 
 pub struct AlgorithmBuilder {}
