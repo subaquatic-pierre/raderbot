@@ -1,24 +1,20 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use log::info;
-use serde_json::Value;
-
-use crate::account::account::Account;
-use crate::account::trade::{OrderSide, PositionId, TradeTx};
-use crate::exchange::api::ExchangeApi;
-use crate::exchange::mock::MockExchangeApi;
-use crate::market::kline::KlineData;
-use crate::market::market::Market;
-use crate::market::messages::MarketMessage;
-use crate::market::types::ArcMutex;
-use crate::storage::fs::FsStorageManager;
-use crate::utils::channel::build_arc_channel;
-
-use super::signal::SignalManager;
-use super::strategy::{Strategy, StrategyResult};
-use super::types::{AlgorithmEvalResult, SignalMessage};
+use crate::{
+    account::{
+        account::Account,
+        trade::{OrderSide, PositionId, TradeTx},
+    },
+    exchange::{api::ExchangeApi, mock::MockExchangeApi},
+    market::{kline::KlineData, market::Market, messages::MarketMessage, types::ArcMutex},
+    storage::fs::FsStorageManager,
+    strategy::{
+        signal::SignalManager,
+        strategy::{Strategy, StrategyResult},
+        types::{AlgorithmEvalResult, SignalMessage},
+    },
+    utils::channel::build_arc_channel,
+};
 
 pub struct BackTest {
     pub strategy: Strategy,

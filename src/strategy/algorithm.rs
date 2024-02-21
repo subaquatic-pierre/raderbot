@@ -1,18 +1,14 @@
 use std::time::Duration;
 
-use log::warn;
 use serde_json::Value;
 
 use crate::{
-    account::trade::OrderSide,
     algorithm::{
-        ma_crossover::EmaSmaCrossover, ma_simple::SimpleMovingAverage,
-        ma_three_crossover::ThreeMaCrossover, rsi::Rsi,
+        bollinger_bands::BollingerBands, ma_crossover::EmaSmaCrossover,
+        ma_simple::SimpleMovingAverage, ma_three_crossover::ThreeMaCrossover, macd::Macd,
+        macd_bollinger::MacdBollingerBands, rsi::Rsi,
     },
-    market::{
-        kline::{Kline, KlineData},
-        ticker::TickerData,
-    },
+    market::kline::Kline,
     utils::time::build_interval,
 };
 
@@ -57,6 +53,18 @@ impl AlgorithmBuilder {
             }
             "RsiEmaSma" => {
                 let algo = Rsi::new(interval, algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "BollingerBands" => {
+                let algo = BollingerBands::new(interval, algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "Macd" => {
+                let algo = Macd::new(interval, algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "MacdBollingerBands" => {
+                let algo = MacdBollingerBands::new(interval, algorithm_params)?;
                 Ok(Box::new(algo))
             }
             _ => Err(AlgorithmError::UnkownName(
