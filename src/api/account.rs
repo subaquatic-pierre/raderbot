@@ -14,7 +14,7 @@ use crate::{
     account::trade::{OrderSide, Position, PositionId},
     exchange::mock::MockExchangeApi,
 };
-use crate::{bot::AppState, exchange::api::ExchangeApi};
+use crate::{app::AppState, exchange::api::ExchangeApi};
 
 #[derive(Debug, Deserialize)]
 pub struct ClosePosParams {

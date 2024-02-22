@@ -5,7 +5,7 @@ use actix_web::{
     HttpResponse, Responder, Scope,
 };
 
-use crate::bot::AppState;
+use crate::app::AppState;
 
 #[get("/info")]
 async fn info(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {

@@ -22,6 +22,11 @@ pub enum AlgorithmEvalResult {
     Ignore,
 }
 
+pub enum FirstLastEnum {
+    First,
+    Last,
+}
+
 #[derive(Debug)]
 pub enum AlgorithmError {
     UnkownName(String),

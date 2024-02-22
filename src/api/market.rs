@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::exchange::types::StreamType;
 
-use crate::bot::AppState;
+use crate::app::AppState;
 use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]

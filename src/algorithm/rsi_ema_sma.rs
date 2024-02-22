@@ -109,13 +109,21 @@ impl Algorithm for RsiEmaSma {
         let long_sma = self.calculate_sma(self.long_sma_period);
         let ema = self.calculate_ema(self.ema_period);
 
-        if rsi < 30.0 && short_sma > medium_sma && medium_sma > long_sma && short_sma > ema {
+        let result = if rsi < 30.0
+            && short_sma > medium_sma
+            && medium_sma > long_sma
+            && short_sma > ema
+        {
             AlgorithmEvalResult::Long
         } else if rsi > 70.0 && short_sma < medium_sma && medium_sma < long_sma && short_sma < ema {
             AlgorithmEvalResult::Short
         } else {
             AlgorithmEvalResult::Ignore
-        }
+        };
+
+        self.clean_data_points();
+
+        result
     }
 
     // Implement the rest of the required methods from the Algorithm trait...
@@ -150,5 +158,15 @@ impl Algorithm for RsiEmaSma {
         self.params = params;
 
         Ok(())
+    }
+
+    fn clean_data_points(&mut self) {
+        // TODO: Change length to be checked
+        // based on individual algorithm
+        let two_weeks_minutes = 10080 * 2;
+        if self.data_points.len() > two_weeks_minutes {
+            // reduce back to 1 week worth on data
+            self.data_points.drain(0..10080);
+        }
     }
 }

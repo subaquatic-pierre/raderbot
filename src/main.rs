@@ -1,4 +1,4 @@
-use bot::new_app_state;
+use app::new_app_state;
 use dotenv::dotenv;
 use std::io;
 
@@ -16,6 +16,7 @@ use api::{
 mod account;
 mod algorithm;
 mod api;
+mod app;
 mod bot;
 mod exchange;
 mod market;

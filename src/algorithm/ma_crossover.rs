@@ -60,26 +60,30 @@ impl Algorithm for EmaSmaCrossover {
     fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
         self.data_points.push(kline.clone());
 
-        if self.data_points.len() >= self.sma_period {
+        let result = if self.data_points.len() >= self.sma_period {
             let ema = self.calculate_ema(kline.clone());
             let sma = self.calculate_sma(kline.clone());
 
             // EMA crossover signal
-            if ema > sma {
-                return AlgorithmEvalResult::Long;
+            let result = if ema > sma {
+                AlgorithmEvalResult::Long
             } else if ema < sma {
-                return AlgorithmEvalResult::Short;
-            }
-
-            // SMA crossover signal (additional signal for diversity)
-            if kline.close > sma {
-                return AlgorithmEvalResult::Long;
+                AlgorithmEvalResult::Short
+            } else if kline.close > sma {
+                AlgorithmEvalResult::Long
             } else if kline.close < sma {
-                return AlgorithmEvalResult::Short;
-            }
-        }
+                AlgorithmEvalResult::Short
+            } else {
+                AlgorithmEvalResult::Ignore
+            };
+            result
+        } else {
+            AlgorithmEvalResult::Ignore
+        };
 
-        AlgorithmEvalResult::Ignore
+        self.clean_data_points();
+
+        result
     }
 
     fn data_points(&self) -> Vec<Kline> {
@@ -112,5 +116,15 @@ impl Algorithm for EmaSmaCrossover {
         self.sma_period = sma_period;
 
         Ok(())
+    }
+
+    fn clean_data_points(&mut self) {
+        // TODO: Change length to be checked
+        // based on individual algorithm
+        let two_weeks_minutes = 10080 * 2;
+        if self.data_points.len() > two_weeks_minutes {
+            // reduce back to 1 week worth on data
+            self.data_points.drain(0..10080);
+        }
     }
 }

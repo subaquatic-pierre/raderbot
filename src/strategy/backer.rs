@@ -10,7 +10,7 @@ use crate::{
     storage::fs::FsStorageManager,
     strategy::{
         signal::SignalManager,
-        strategy::{Strategy, StrategyResult},
+        strategy::{Strategy, StrategySummary},
         types::{AlgorithmEvalResult, SignalMessage},
     },
     utils::channel::build_arc_channel,
@@ -89,42 +89,12 @@ impl BackTest {
         self.signals.push(signal)
     }
 
-    pub fn calc_max_profit(&self, trades: &Vec<TradeTx>) -> f64 {
-        let mut max_balance = 0.0;
-        let mut current_balance = 0.0;
-
-        for trade_tx in trades {
-            let profit = trade_tx.calc_profit();
-            current_balance += profit;
-
-            if current_balance > max_balance {
-                max_balance = current_balance;
-            }
-        }
-
-        max_balance
-    }
-
-    pub fn calc_max_drawdown(&self, trades: &Vec<TradeTx>) -> f64 {
-        let mut min_balance = f64::MAX;
-        let mut current_balance = 0.0;
-
-        for trade_tx in trades {
-            let profit = trade_tx.calc_profit();
-            current_balance += profit;
-
-            if current_balance < min_balance {
-                min_balance = current_balance;
-            }
-        }
-
-        min_balance
-    }
-
-    pub async fn result(&mut self) -> StrategyResult {
+    pub async fn result(&mut self) -> StrategySummary {
         for signal in &self.signals {
             self.signal_manager.handle_signal(signal.clone()).await
         }
+
+        let info = self.strategy.info().await;
 
         let active_positions: Vec<(PositionId, f64)> = self
             .account
@@ -147,21 +117,18 @@ impl BackTest {
         // get all trade txs
         let trades: Vec<TradeTx> = self.account.lock().await.trades();
 
-        let max_profit = self.calc_max_profit(&trades);
-        let max_drawdown = self.calc_max_drawdown(&trades);
+        let max_profit = Strategy::calc_max_profit(&trades);
+        let max_drawdown = Strategy::calc_max_drawdown(&trades);
+        let long_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Long);
+        let short_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Short);
+        let profit: f64 = Strategy::calc_profit(&trades);
 
-        let profit: f64 = trades.iter().map(|trade| trade.calc_profit()).sum();
-        let long_count = trades
-            .iter()
-            .filter(|trade| trade.position.order_side == OrderSide::Long)
-            .count();
-        let short_count = trades.len() - long_count;
-
-        StrategyResult {
+        StrategySummary {
+            info,
             profit,
             // trades,
-            long_count,
-            short_count,
+            long_trade_count,
+            short_trade_count,
             // signals,
             // // buy_signal_count,
             // sell_signal_count,

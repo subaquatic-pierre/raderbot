@@ -1,12 +1,13 @@
-use actix_web::web::Data;
 use dotenv_codegen::dotenv;
-use log::{info, warn};
 use serde_json::Value;
 
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    account::account::Account,
+    account::{
+        account::Account,
+        trade::{Position, TradeTx},
+    },
     exchange::{api::ExchangeApi, bingx::BingXApi, mock::MockExchangeApi},
     market::{
         market::Market,
@@ -17,7 +18,7 @@ use crate::{
     strategy::{
         backer::BackTest,
         signal::SignalManager,
-        strategy::{Strategy, StrategyId, StrategyResult, StrategySettings},
+        strategy::{Strategy, StrategyId, StrategyInfo, StrategySettings, StrategySummary},
         types::{AlgorithmError, SignalMessage},
     },
     utils::channel::build_arc_channel,
@@ -97,26 +98,28 @@ impl RaderBot {
         _self
     }
 
-    pub async fn add_strategy(
+    pub async fn start_strategy(
         &mut self,
         strategy_name: &str,
         symbol: &str,
         interval: &str,
         settings: StrategySettings,
         algorithm_params: Value,
-    ) -> Result<StrategyId, AlgorithmError> {
+    ) -> Result<StrategyInfo, AlgorithmError> {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
 
-        let strategy = Strategy::new(
+        let mut strategy = Strategy::new(
             strategy_name,
             symbol,
             interval,
             strategy_tx,
             market,
-            StrategySettings::default(),
+            settings,
             algorithm_params,
         )?;
+
+        let strategy_info = strategy.info().await;
 
         let handle = strategy.start().await;
         let strategy_id = strategy.id;
@@ -129,10 +132,55 @@ impl RaderBot {
         self.strategy_handles.insert(strategy.id, handle);
         self.strategies.insert(strategy.id, strategy);
 
-        Ok(strategy_id)
+        Ok(strategy_info)
     }
 
-    pub async fn stop_strategy(&mut self, strategy_id: StrategyId) -> String {
+    pub async fn stop_strategy(
+        &mut self,
+        strategy_id: StrategyId,
+        close_positions: bool,
+    ) -> Option<StrategySummary> {
+        let account = self.account.clone();
+
+        // Get all positions associated with the strategy
+        let positions: Vec<Position> = self
+            .account
+            .lock()
+            .await
+            .strategy_positions(strategy_id)
+            .iter()
+            .map(|&p| p.clone())
+            .collect();
+
+        // Close all positions on account attached to this strategy
+        if close_positions {
+            for position in positions {
+                if let Some(close_price) =
+                    self.market.lock().await.last_price(&position.symbol).await
+                {
+                    account
+                        .lock()
+                        .await
+                        .close_position(position.id, close_price)
+                        .await;
+                }
+            }
+        }
+
+        // Get all trades associated with this strategy
+        // Used to calculate strategy summary
+        let trades: Vec<TradeTx> = self
+            .account
+            .lock()
+            .await
+            .strategy_trades(strategy_id)
+            .iter()
+            .map(|&t| t.clone())
+            .collect();
+
+        let mut summary: Option<StrategySummary> = None;
+
+        // Remove strategy handles
         if let Some(handle) = self.strategy_handles.get(&strategy_id) {
             handle.abort();
 
@@ -141,13 +189,21 @@ impl RaderBot {
             self.signal_manager
                 .lock()
                 .await
-                .remove_strategy_settings(strategy_id)
-        }
+                .remove_strategy_settings(strategy_id);
 
-        strategy_id.to_string()
+            // Call stop on strategy to update strategy internal state
+            if let Some(strategy) = self.get_strategy(strategy_id) {
+                summary = Some(strategy.stop(trades).await);
+            }
+        };
+
+        // Save strategy to historical data
+        // TODO: Use storage manager to save summary
+
+        summary
     }
 
-    pub fn get_strategy_ids(&mut self) -> Vec<StrategyId> {
+    pub fn get_active_strategy_ids(&mut self) -> Vec<StrategyId> {
         let mut strategies = vec![];
         for (strategy_id, _strategy) in self.strategies.iter() {
             strategies.push(*strategy_id)
@@ -160,6 +216,34 @@ impl RaderBot {
         self.strategies.get_mut(&strategy_id)
     }
 
+    pub fn get_historical_strategy_ids(&mut self) -> Vec<StrategyId> {
+        // TODO: Use Storage manager to pull data
+        unimplemented!()
+        // let mut strategies = vec![];
+
+        // strategies
+    }
+
+    pub fn get_historical_strategy_info(
+        &mut self,
+        strategy_id: StrategyId,
+    ) -> Option<StrategyInfo> {
+        // TODO: Use Storage manager to pull data
+        unimplemented!()
+
+        // None
+    }
+
+    pub fn get_historical_strategy_summary(
+        &mut self,
+        strategy_id: StrategyId,
+    ) -> Option<StrategySummary> {
+        // TODO: Use Storage manager to pull data
+        unimplemented!()
+
+        // None
+    }
+
     pub async fn run_back_test(
         &mut self,
         strategy_name: &str,
@@ -169,7 +253,7 @@ impl RaderBot {
         to_ts: u64,
         settings: StrategySettings,
         algorithm_params: Value,
-    ) -> Result<StrategyResult, AlgorithmError> {
+    ) -> Result<StrategySummary, AlgorithmError> {
         let strategy_tx = self.strategy_tx.clone();
         let strategy = Strategy::new(
             strategy_name,
@@ -213,28 +297,4 @@ impl RaderBot {
             }
         });
     }
-}
-
-pub struct AppState {
-    pub bot: ArcMutex<RaderBot>,
-}
-
-impl AppState {
-    pub async fn get_account(&self) -> ArcMutex<Account> {
-        self.bot.lock().await.account.clone()
-    }
-
-    pub async fn get_market(&self) -> ArcMutex<Market> {
-        self.bot.lock().await.market.clone()
-    }
-
-    pub async fn get_exchange_api(&self) -> Arc<Box<dyn ExchangeApi>> {
-        self.bot.lock().await.exchange_api.clone()
-    }
-}
-
-pub async fn new_app_state() -> Data<AppState> {
-    let bot = ArcMutex::new(RaderBot::new().await);
-
-    Data::new(AppState { bot })
 }

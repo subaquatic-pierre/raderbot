@@ -11,7 +11,7 @@ use directories::UserDirs;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::bot::AppState;
+use crate::app::AppState;
 use crate::utils::crypt::sign_hmac;
 use crate::utils::kline::{
     build_kline_filename, build_kline_key, interval_symbol_from_binance_filename,

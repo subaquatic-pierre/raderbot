@@ -48,7 +48,7 @@ impl Algorithm for SimpleMovingAverage {
     fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
         self.data_points.push(kline.clone());
 
-        if self.data_points.len() >= self.period {
+        let result = if self.data_points.len() >= self.period {
             let sma = self.calculate_sma(self.period);
 
             // Placeholder logic for buy/sell decision based on SMA
@@ -59,7 +59,11 @@ impl Algorithm for SimpleMovingAverage {
             }
         } else {
             AlgorithmEvalResult::Ignore
-        }
+        };
+
+        self.clean_data_points();
+
+        result
     }
 
     fn data_points(&self) -> Vec<Kline> {
@@ -81,5 +85,15 @@ impl Algorithm for SimpleMovingAverage {
         self.period = period;
         self.params = params;
         Ok(())
+    }
+
+    fn clean_data_points(&mut self) {
+        // TODO: Change length to be checked
+        // based on individual algorithm
+        let two_weeks_minutes = 10080 * 2;
+        if self.data_points.len() > two_weeks_minutes {
+            // reduce back to 1 week worth on data
+            self.data_points.drain(0..10080);
+        }
     }
 }

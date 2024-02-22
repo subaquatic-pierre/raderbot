@@ -78,7 +78,7 @@ impl Algorithm for BollingerBands {
         let (upper_band, _middle_band, lower_band) = self.calculate_bollinger_bands();
 
         // Example trading logic based on Bollinger Bands
-        if kline.close > upper_band {
+        let result = if kline.close > upper_band {
             // Price is above the upper band - potential sell signal (overbought condition)
             AlgorithmEvalResult::Short
         } else if kline.close < lower_band {
@@ -87,7 +87,11 @@ impl Algorithm for BollingerBands {
         } else {
             // Price is within the bands - no clear signal
             AlgorithmEvalResult::Ignore
-        }
+        };
+
+        self.clean_data_points();
+
+        result
     }
 
     // Implement the rest of the required methods from the Algorithm trait...
@@ -113,5 +117,15 @@ impl Algorithm for BollingerBands {
 
         self.params = params;
         Ok(())
+    }
+
+    fn clean_data_points(&mut self) {
+        // TODO: Change length to be checked
+        // based on individual algorithm
+        let two_weeks_minutes = 10080 * 2;
+        if self.data_points.len() > two_weeks_minutes {
+            // reduce back to 1 week worth on data
+            self.data_points.drain(0..10080);
+        }
     }
 }

@@ -12,16 +12,18 @@ pub struct CustomAlgorithm {
     data_points: Vec<Kline>,
     interval: Duration,
     custom_param: usize,
+    params: Value,
 }
 
 impl CustomAlgorithm {
-    pub fn new(interval: Duration, algorithm_params: Value) -> Result<Self, AlgorithmError> {
-        let custom_param = parse_usize_from_value("custom_param", &algorithm_params)
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+        let custom_param = parse_usize_from_value("custom_param", &params)
             .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
         Ok(Self {
             data_points: vec![],
             interval,
             custom_param,
+            params,
         })
     }
 
@@ -41,11 +43,9 @@ impl Algorithm for CustomAlgorithm {
         // Example logic using self.custom_param
         // ...
 
-        AlgorithmEvalResult::Ignore
-    }
+        self.clean_data_points();
 
-    fn data_points(&self) -> Vec<Kline> {
-        self.data_points.clone()
+        AlgorithmEvalResult::Ignore
     }
 
     fn interval(&self) -> Duration {
@@ -53,22 +53,33 @@ impl Algorithm for CustomAlgorithm {
     }
 
     fn get_params(&self) -> &Value {
-        unimplemented!()
+        &self.params
     }
 
     fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
         unimplemented!()
     }
+
+    fn data_points(&self) -> Vec<Kline> {
+        self.data_points.clone()
+    }
+    fn clean_data_points(&mut self) {
+        unimplemented!()
+    }
 }
 
-// pub enum AlgorithmEvalResult {
+// ---
+// Data structures used in algorithm
+// Examples below
+// ---
+
+// enum AlgorithmEvalResult {
 //     Long,
 //     Short,
 //     Ignore,
 // }
 
-// #[derive(Serialize, Deserialize, Debug, Clone)]
-// pub struct Kline {
+// struct Kline {
 //     pub symbol: String,
 //     pub interval: String,
 //     pub open: f64,

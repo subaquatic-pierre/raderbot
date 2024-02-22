@@ -84,7 +84,7 @@ impl Algorithm for Macd {
         self.data_points.push(kline);
         self.update_macd_and_signal_lines();
 
-        if let (Some(&latest_macd), Some(&latest_signal)) =
+        let result = if let (Some(&latest_macd), Some(&latest_signal)) =
             (self.macd_line.last(), self.signal_line.last())
         {
             if latest_macd > latest_signal {
@@ -98,7 +98,11 @@ impl Algorithm for Macd {
             }
         } else {
             AlgorithmEvalResult::Ignore
-        }
+        };
+
+        self.clean_data_points();
+
+        result
     }
 
     fn data_points(&self) -> Vec<Kline> {
@@ -127,5 +131,15 @@ impl Algorithm for Macd {
         self.params = params;
 
         Ok(())
+    }
+
+    fn clean_data_points(&mut self) {
+        // TODO: Change length to be checked
+        // based on individual algorithm
+        let two_weeks_minutes = 10080 * 2;
+        if self.data_points.len() > two_weeks_minutes {
+            // reduce back to 1 week worth on data
+            self.data_points.drain(0..10080);
+        }
     }
 }

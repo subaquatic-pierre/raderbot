@@ -16,10 +16,16 @@ use super::types::{AlgorithmError, AlgorithmEvalResult};
 
 pub trait Algorithm: Send + Sync {
     fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult;
-    fn data_points(&self) -> Vec<Kline>;
     fn interval(&self) -> Duration;
     fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError>;
     fn get_params(&self) -> &Value;
+
+    // TODO: Create AlgorithmDataPointManager to handle data points
+    // It will manage cleaning of data if data points length is too long,
+    // to manage memory more efficiently as also prevent any bugs creeping
+    // up that could occur when implementing a custom algorithm
+    fn data_points(&self) -> Vec<Kline>;
+    fn clean_data_points(&mut self);
 }
 
 pub struct AlgorithmBuilder {}
