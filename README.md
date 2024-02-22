@@ -41,14 +41,14 @@ Make sure you have the following tools installed on your system:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/subaquatic-pierre/rader-bot.git
+   git clone https://github.com/subaquatic-pierre/raderbot.git
 
    ```
 
 2. Navigate to the project directory:
 
 ```bash
-cd rader-bot
+cd raderbot
 ```
 
 3. Build and run the project:

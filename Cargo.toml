@@ -1,5 +1,5 @@
 [package]
-name = "rader-bot"
+name = "raderbot"
 version = "0.1.0"
 edition = "2021"
 
