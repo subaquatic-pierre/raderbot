@@ -75,13 +75,13 @@ async fn stop_strategy(
 
     let close_positions = body.close_positions.unwrap_or(true);
 
-    let strategy_id = bot
+    let summary = bot
         .lock()
         .await
         .stop_strategy(body.strategy_id, close_positions)
         .await;
 
-    let json_data = json!({ "success": "Strategy stopped","strategy_id":strategy_id });
+    let json_data = json!({ "success": "Strategy stopped","strategy_summary":summary });
 
     HttpResponse::Ok().json(json_data)
 }
@@ -167,17 +167,9 @@ async fn list_active_strategies(app_data: web::Data<AppState>) -> impl Responder
 async fn list_historical_strategies(app_data: web::Data<AppState>) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let strategy_ids = bot.lock().await.get_historical_strategy_ids();
+    let summaries = bot.lock().await.list_historical_strategies();
 
-    let mut infos = vec![];
-
-    for id in strategy_ids {
-        if let Some(info) = bot.lock().await.get_historical_strategy_info(id) {
-            infos.push(info)
-        }
-    }
-
-    let json_data = json!({ "strategy_infos": infos });
+    let json_data = json!({ "strategy_summaries": summaries });
 
     HttpResponse::Ok().json(json_data)
 }
@@ -197,7 +189,8 @@ async fn historical_strategy_summary(
 
         HttpResponse::Ok().json(json_data)
     } else {
-        let json_data = json!({ "error": "Historical data not found" });
+        let json_data =
+            json!({ "error": "Historical data not found", "strategy_id": body.strategy_id });
 
         HttpResponse::Ok().json(json_data)
     }

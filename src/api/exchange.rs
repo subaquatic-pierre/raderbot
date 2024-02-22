@@ -7,6 +7,19 @@ use actix_web::{
 
 use crate::app::AppState;
 
+#[get("/account")]
+async fn account(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
+    let exchange = app_data.get_exchange_api().await;
+
+    let data = exchange
+        .get_account()
+        .await
+        .expect("Unable to get account info");
+
+    // Return the stream data as JSON
+    HttpResponse::Ok().json(data)
+}
+
 #[get("/info")]
 async fn info(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
     let exchange = app_data.get_exchange_api().await;
@@ -18,5 +31,5 @@ async fn info(app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responde
 }
 
 pub fn register_exchange_service() -> Scope {
-    scope("/exchange").service(info)
+    scope("/exchange").service(info).service(account)
 }

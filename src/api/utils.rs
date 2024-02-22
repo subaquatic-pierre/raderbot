@@ -61,6 +61,7 @@ async fn load_klines(
     _app_data: web::Data<AppState>,
     _body: Json<LoadKlineParams>,
 ) -> impl Responder {
+    // TODO: Use storage manager to save klines
     let user_dirs = UserDirs::new().expect("Failed to get user directories");
     let home_dir = user_dirs.home_dir();
     let data_dir = home_dir.join("Projects/BinanceData");

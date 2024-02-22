@@ -72,7 +72,7 @@ impl BingXApi {
             custom_headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         }
         custom_headers.insert(
-            "X-MBX-APIKEY",
+            "X-BX-APIKEY",
             HeaderValue::from_str(self.api_key.as_str()).expect("Unable to get API key"),
         );
 
@@ -83,6 +83,7 @@ impl BingXApi {
         &self,
         endpoint: &str,
         query_str: Option<&str>,
+        body: Option<String>,
     ) -> Result<Response, reqwest::Error> {
         // let signature = self.sign_query_str(query_str);
         let url = match query_str {
@@ -90,9 +91,15 @@ impl BingXApi {
             None => format!("{}{}", self.host, endpoint),
         };
 
+        let body = match body {
+            Some(b) => b.to_string(),
+            None => "".to_string(),
+        };
+
         self.client
             .get(&url)
             .headers(self.build_headers(true))
+            .body(body)
             .send()
             .await
     }
@@ -206,14 +213,24 @@ impl ExchangeApi for BingXApi {
     }
 
     async fn get_account(&self) -> ApiResult<Value> {
-        let endpoint = "/api/v3/account";
-        let ts = generate_ts();
+        let endpoint = "/openApi/swap/v2/user/balance";
+        // let endpoint = "/openApi/spot/v1/account/balance";
+        let ts = generate_ts().to_string();
 
-        let query_str = format!("timestamp={ts}");
-        let signature = self.sign_query_str(&query_str);
-        let query_str = format!("{}&signature={signature}", query_str);
+        let query_str = QueryStr::new(vec![("timestamp", &ts)]);
 
-        let res = self.get(endpoint, Some(&query_str)).await?;
+        let signature = self.sign_query_str(&query_str.to_string());
+
+        let query_str = QueryStr::new(vec![("timestamp", &ts), ("signature", &signature)]);
+
+        // let body = json!({
+        //     "timestamp": &ts,
+        //     "signature": &signature
+        // });
+
+        let res = self
+            .get(endpoint, Some(&query_str.to_string()), None)
+            .await?;
 
         self.handle_response(res).await
     }
@@ -226,7 +243,7 @@ impl ExchangeApi for BingXApi {
         let signature = self.sign_query_str(&query_str);
         let query_str = format!("{}&signature={signature}", query_str);
 
-        let res = self.get(endpoint, Some(&query_str)).await?;
+        let res = self.get(endpoint, Some(&query_str), None).await?;
 
         self.handle_response(res).await
     }
@@ -239,7 +256,7 @@ impl ExchangeApi for BingXApi {
         let signature = self.sign_query_str(&query_str);
         let query_str = format!("{}&signature={signature}", query_str);
 
-        let res = self.get(endpoint, Some(&query_str)).await?;
+        let res = self.get(endpoint, Some(&query_str), None).await?;
 
         self.handle_response(res).await
     }
@@ -250,7 +267,7 @@ impl ExchangeApi for BingXApi {
     async fn info(&self) -> ApiResult<ExchangeInfo> {
         let endpoint = "/api/v3/exchangeInfo";
 
-        let res = self.get(endpoint, None).await?;
+        let res = self.get(endpoint, None, None).await?;
 
         // self.handle_response(res).await
 

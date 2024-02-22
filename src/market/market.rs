@@ -42,7 +42,8 @@ impl Market {
         // stream_manager: ArcMutex<StreamManager>,
         market_receiver: ArcReceiver<MarketMessage>,
         exchange_api: Arc<Box<dyn ExchangeApi>>,
-        storage_manager: Box<dyn StorageManager>,
+        storage_manager: Arc<Box<dyn StorageManager>>,
+
         init_workers: bool,
     ) -> Self {
         let mut _self = Self {
@@ -271,14 +272,14 @@ pub trait MarketDataSymbol {
 pub struct MarketData {
     all_klines: HashMap<String, KlineData>,
     all_tickers: HashMap<String, TickerData>,
-    storage_manager: Box<dyn StorageManager>,
+    storage_manager: Arc<Box<dyn StorageManager>>,
     last_backup: SystemTime,
 }
 
 const BACKUP_INTERVAL: u64 = 20;
 
 impl MarketData {
-    pub fn new(storage_manager: Box<dyn StorageManager>) -> Self {
+    pub fn new(storage_manager: Arc<Box<dyn StorageManager>>) -> Self {
         Self {
             storage_manager,
             all_klines: HashMap::new(),
@@ -364,7 +365,7 @@ impl MarketData {
 
         let mut filtered_klines = self
             .storage_manager
-            .load_klines(symbol, interval, from_ts, to_ts, limit);
+            .get_klines(symbol, interval, from_ts, to_ts, limit);
         filtered_klines.extend_from_slice(&in_mem_kline);
 
         // filtered by from_ts and to_ts

@@ -1,12 +1,16 @@
 use csv::ReaderBuilder;
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::fs;
 use std::fs::{File, OpenOptions};
+use std::io::Read;
+use std::io::Write;
 use std::io::{self};
 use std::path::{Path, PathBuf};
 
 use crate::market::kline::Kline;
+use crate::strategy::strategy::{StrategyId, StrategySummary};
 use crate::utils::kline::{
     build_kline_filename, build_kline_key, generate_kline_filenames_in_range,
 };
@@ -70,6 +74,20 @@ impl FsStorageManager {
         }
 
         app_directory
+    }
+
+    fn strategy_summary_filepath(
+        &self,
+        strategy_id: StrategyId,
+    ) -> Result<PathBuf, Box<dyn Error>> {
+        // Build market directory and subdirectory for klines
+        let data_dir = self.data_directory.join("strategies");
+        std::fs::create_dir_all(&data_dir)?;
+        let filename = format!("{strategy_id}.json");
+
+        let filepath = data_dir.join(filename);
+
+        Ok(filepath)
     }
 }
 
@@ -157,7 +175,7 @@ impl StorageManager for FsStorageManager {
         Ok(())
     }
 
-    fn load_klines(
+    fn get_klines(
         &self,
         symbol: &str,
         interval: &str,
@@ -193,5 +211,56 @@ impl StorageManager for FsStorageManager {
         };
 
         filtered_klines
+    }
+
+    fn save_strategy_summary(&self, summary: StrategySummary) -> Result<(), Box<dyn Error>> {
+        let filepath = self.strategy_summary_filepath(summary.info.id)?;
+        let json_str = serde_json::to_string(&summary)?;
+
+        // Write JSON string to a file
+        let mut file = File::create(filepath)?;
+        file.write_all(json_str.as_bytes())?;
+
+        Ok(())
+    }
+
+    fn list_all_saved_strategy_summaries(&self) -> Result<Vec<StrategySummary>, Box<dyn Error>> {
+        let mut data: Vec<StrategySummary> = vec![];
+
+        let data_dir = self.data_directory.join("strategies");
+
+        if data_dir.is_dir() {
+            for entry in fs::read_dir(data_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if let Some(extension) = path.extension() {
+                    if extension == "json" {
+                        let file_content = fs::read_to_string(path)?;
+                        let strategy_summary: StrategySummary =
+                            serde_json::from_str(&file_content)?;
+                        data.push(strategy_summary);
+                    }
+                }
+            }
+        }
+
+        Ok(data)
+    }
+
+    fn get_strategy_summary(
+        &self,
+        strategy_id: StrategyId,
+    ) -> Result<StrategySummary, Box<dyn Error>> {
+        let filepath = self.strategy_summary_filepath(strategy_id)?;
+
+        let mut file = File::open(filepath)?;
+
+        // Read the contents of the file into a string
+        let mut json_str = String::new();
+        file.read_to_string(&mut json_str)?;
+
+        // Deserialize the JSON string into a data structure
+        let data: StrategySummary = serde_json::from_str(&json_str)?;
+        Ok(data)
     }
 }

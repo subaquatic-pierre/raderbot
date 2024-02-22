@@ -7,7 +7,7 @@ use crate::{
     },
     exchange::{api::ExchangeApi, mock::MockExchangeApi},
     market::{kline::KlineData, market::Market, messages::MarketMessage, types::ArcMutex},
-    storage::fs::FsStorageManager,
+    storage::{fs::FsStorageManager, manager::StorageManager},
     strategy::{
         signal::SignalManager,
         strategy::{Strategy, StrategySummary},
@@ -31,10 +31,17 @@ impl BackTest {
         let exchange_api: Arc<Box<dyn ExchangeApi>> =
             Arc::new(Box::new(MockExchangeApi::default()));
 
-        let storage_manager = Box::new(FsStorageManager::default());
+        let storage_manager: Arc<Box<dyn StorageManager>> =
+            Arc::new(Box::new(FsStorageManager::default()));
 
         let market = ArcMutex::new(
-            Market::new(market_rx, exchange_api.clone(), storage_manager, false).await,
+            Market::new(
+                market_rx,
+                exchange_api.clone(),
+                storage_manager.clone(),
+                false,
+            )
+            .await,
         );
 
         // create new storage manager

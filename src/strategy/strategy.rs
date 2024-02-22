@@ -286,7 +286,7 @@ impl Strategy {
     }
 
     pub fn calc_max_drawdown(trades: &Vec<TradeTx>) -> f64 {
-        let mut min_balance = f64::MAX;
+        let mut min_balance = if trades.is_empty() { 0.0 } else { f64::MAX };
         let mut current_balance = 0.0;
 
         for trade_tx in trades {
@@ -361,7 +361,7 @@ impl Default for StrategySettings {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StrategySummary {
     pub info: StrategyInfo,
     pub profit: f64,

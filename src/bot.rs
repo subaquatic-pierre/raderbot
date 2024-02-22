@@ -1,4 +1,5 @@
 use dotenv_codegen::dotenv;
+use log::info;
 use serde_json::Value;
 
 use std::{collections::HashMap, sync::Arc};
@@ -14,7 +15,7 @@ use crate::{
         messages::MarketMessage,
         types::{ArcMutex, ArcReceiver, ArcSender},
     },
-    storage::fs::FsStorageManager,
+    storage::{fs::FsStorageManager, manager::StorageManager},
     strategy::{
         backer::BackTest,
         signal::SignalManager,
@@ -34,14 +35,18 @@ pub struct RaderBot {
     strategy_handles: HashMap<StrategyId, JoinHandle<()>>,
     strategies: HashMap<StrategyId, Strategy>,
     strategy_rx: ArcReceiver<SignalMessage>,
+    // TODO: Add to Arc<Box<dyn StorageManager>>
+    // to have access to storage across bot, ie.
+    // may need data base connection
+    storage_manager: Arc<Box<dyn StorageManager>>,
     strategy_tx: ArcSender<SignalMessage>,
 }
 
 impl RaderBot {
     pub async fn new() -> Self {
         // create new Arc of exchange API
-        let api_key = dotenv!("BINANCE_API_KEY");
-        let secret_key = dotenv!("BINANCE_SECRET_KEY");
+        let api_key = dotenv!("BINGX_API_KEY");
+        let secret_key = dotenv!("BINGX_SECRET_KEY");
         let dry_run = dotenv!("DRY_RUN");
 
         // create new channel for stream handler and market to communicate
@@ -54,13 +59,14 @@ impl RaderBot {
         )));
 
         // create new storage manager
-        let storage_manager = Box::new(FsStorageManager::default());
+        let storage_manager: Arc<Box<dyn StorageManager>> =
+            Arc::new(Box::new(FsStorageManager::default()));
 
         // create new market to hold market data
         let market = Market::new(
             market_rx.clone(),
             exchange_api.clone(),
-            storage_manager,
+            storage_manager.clone(),
             true,
         )
         .await;
@@ -91,6 +97,7 @@ impl RaderBot {
             strategies: HashMap::new(),
             strategy_rx,
             strategy_tx,
+            storage_manager,
         };
 
         _self.init().await;
@@ -119,10 +126,10 @@ impl RaderBot {
             algorithm_params,
         )?;
 
-        let strategy_info = strategy.info().await;
-
         let handle = strategy.start().await;
         let strategy_id = strategy.id;
+
+        let strategy_info = strategy.info().await;
 
         self.signal_manager
             .lock()
@@ -147,21 +154,26 @@ impl RaderBot {
         if let Some(handle) = self.strategy_handles.get(&strategy_id) {
             handle.abort();
 
+            // Call stop on strategy to update strategy internal state
+            if let Some(strategy) = self.get_strategy(strategy_id) {
+                let _summary = strategy.stop(account, close_positions).await;
+
+                // Save summary
+                self.storage_manager
+                    .save_strategy_summary(_summary.clone())
+                    .ok();
+
+                summary = Some(_summary);
+            }
+
+            // Remove all handles and settings from signal_manager
             self.strategy_handles.remove(&strategy_id);
             self.strategies.remove(&strategy_id);
             self.signal_manager
                 .lock()
                 .await
                 .remove_strategy_settings(strategy_id);
-
-            // Call stop on strategy to update strategy internal state
-            if let Some(strategy) = self.get_strategy(strategy_id) {
-                summary = Some(strategy.stop(account, close_positions).await);
-            }
         };
-
-        // Save strategy to historical data
-        // TODO: Use storage manager to save summary
 
         summary
     }
@@ -179,32 +191,17 @@ impl RaderBot {
         self.strategies.get_mut(&strategy_id)
     }
 
-    pub fn get_historical_strategy_ids(&mut self) -> Vec<StrategyId> {
-        // TODO: Use Storage manager to pull data
-        unimplemented!()
-        // let mut strategies = vec![];
-
-        // strategies
-    }
-
-    pub fn get_historical_strategy_info(
-        &mut self,
-        strategy_id: StrategyId,
-    ) -> Option<StrategyInfo> {
-        // TODO: Use Storage manager to pull data
-        unimplemented!()
-
-        // None
+    pub fn list_historical_strategies(&mut self) -> Option<Vec<StrategySummary>> {
+        self.storage_manager
+            .list_all_saved_strategy_summaries()
+            .ok()
     }
 
     pub fn get_historical_strategy_summary(
         &mut self,
         strategy_id: StrategyId,
     ) -> Option<StrategySummary> {
-        // TODO: Use Storage manager to pull data
-        unimplemented!()
-
-        // None
+        self.storage_manager.get_strategy_summary(strategy_id).ok()
     }
 
     pub async fn run_back_test(
