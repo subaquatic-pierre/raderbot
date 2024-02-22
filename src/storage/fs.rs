@@ -181,7 +181,7 @@ impl StorageManager for FsStorageManager {
         interval: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
-        limit: Option<usize>,
+        _limit: Option<usize>,
     ) -> Vec<Kline> {
         let kline_key = build_kline_key(symbol, interval);
 

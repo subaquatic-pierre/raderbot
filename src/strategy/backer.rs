@@ -26,7 +26,7 @@ pub struct BackTest {
 }
 
 impl BackTest {
-    pub async fn new(strategy: Strategy, initial_balance: Option<f64>) -> Self {
+    pub async fn new(strategy: Strategy, _initial_balance: Option<f64>) -> Self {
         let (_, market_rx) = build_arc_channel::<MarketMessage>();
         let exchange_api: Arc<Box<dyn ExchangeApi>> =
             Arc::new(Box::new(MockExchangeApi::default()));

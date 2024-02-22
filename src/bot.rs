@@ -1,5 +1,5 @@
 use dotenv_codegen::dotenv;
-use log::info;
+
 use serde_json::Value;
 
 use std::{collections::HashMap, sync::Arc};
@@ -7,7 +7,6 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     account::{
         account::Account,
-        trade::{Position, TradeTx},
     },
     exchange::{api::ExchangeApi, bingx::BingXApi, mock::MockExchangeApi},
     market::{

@@ -1,4 +1,4 @@
-use env_logger::init;
+
 use futures::StreamExt;
 
 use log::info;

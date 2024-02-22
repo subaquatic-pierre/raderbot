@@ -4,7 +4,7 @@ use actix_web::{
     web::{self, scope},
     HttpResponse, Responder, Scope,
 };
-use actix_web::{post, HttpRequest};
+use actix_web::{post};
 
 use serde::Deserialize;
 use serde_json::json;

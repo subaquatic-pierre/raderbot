@@ -6,7 +6,6 @@ use uuid::Uuid;
 
 use crate::{
     account::{
-        self,
         account::Account,
         trade::{OrderSide, Position, TradeTx},
     },

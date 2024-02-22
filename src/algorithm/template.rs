@@ -56,7 +56,7 @@ impl Algorithm for CustomAlgorithm {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+    fn set_params(&mut self, _params: Value) -> Result<(), AlgorithmError> {
         unimplemented!()
     }
 

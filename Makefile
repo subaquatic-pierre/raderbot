@@ -5,6 +5,8 @@ run:
 
 build:
 	cargo build --release
+	cp ./target/release/raderbot .
+	chmod +x ./raderbot
 
 watch:
 	cargo watch -x "run"

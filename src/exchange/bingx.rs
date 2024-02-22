@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 
 use futures_util::SinkExt;
-use log::{info, warn};
+use log::{warn};
 
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::{Client, Response};
 // use reqwest::Client;
 
-use futures_util::StreamExt;
+
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
-use crate::account::trade::{OrderSide, Position, PositionId, TradeTx};
+use crate::account::trade::{OrderSide, Position, TradeTx};
 use crate::exchange::api::{ExchangeApi, QueryStr};
 
 use crate::market::messages::MarketMessage;
@@ -27,7 +27,7 @@ use crate::market::{kline::Kline, ticker::Ticker};
 use crate::utils::time::generate_ts;
 
 use super::api::ExchangeInfo;
-use super::stream::build_stream_id;
+
 use super::stream::{StreamManager, StreamMeta};
 use super::types::{ApiResult, StreamType};
 
@@ -267,7 +267,7 @@ impl ExchangeApi for BingXApi {
     async fn info(&self) -> ApiResult<ExchangeInfo> {
         let endpoint = "/api/v3/exchangeInfo";
 
-        let res = self.get(endpoint, None, None).await?;
+        let _res = self.get(endpoint, None, None).await?;
 
         // self.handle_response(res).await
 

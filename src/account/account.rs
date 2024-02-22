@@ -134,7 +134,7 @@ impl Account {
         positions
     }
 
-    pub fn strategy_trades(&self, strategy_id: StrategyId) -> Vec<&TradeTx> {
+    pub fn strategy_trades(&self, _strategy_id: StrategyId) -> Vec<&TradeTx> {
         let mut trades = vec![];
         for trade in &self.trades {
             if let Some(strategy_id) = trade.position.strategy_id {

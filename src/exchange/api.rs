@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use reqwest::{header::HeaderMap, Response};
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    stream::{build_stream_id, StreamManager, StreamMeta},
+    stream::{StreamManager, StreamMeta},
     types::{ApiResult, StreamType},
 };
 
