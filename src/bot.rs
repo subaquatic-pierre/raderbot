@@ -140,45 +140,8 @@ impl RaderBot {
         strategy_id: StrategyId,
         close_positions: bool,
     ) -> Option<StrategySummary> {
-        let account = self.account.clone();
-
-        // Get all positions associated with the strategy
-        let positions: Vec<Position> = self
-            .account
-            .lock()
-            .await
-            .strategy_positions(strategy_id)
-            .iter()
-            .map(|&p| p.clone())
-            .collect();
-
-        // Close all positions on account attached to this strategy
-        if close_positions {
-            for position in positions {
-                if let Some(close_price) =
-                    self.market.lock().await.last_price(&position.symbol).await
-                {
-                    account
-                        .lock()
-                        .await
-                        .close_position(position.id, close_price)
-                        .await;
-                }
-            }
-        }
-
-        // Get all trades associated with this strategy
-        // Used to calculate strategy summary
-        let trades: Vec<TradeTx> = self
-            .account
-            .lock()
-            .await
-            .strategy_trades(strategy_id)
-            .iter()
-            .map(|&t| t.clone())
-            .collect();
-
         let mut summary: Option<StrategySummary> = None;
+        let account = self.account.clone();
 
         // Remove strategy handles
         if let Some(handle) = self.strategy_handles.get(&strategy_id) {
@@ -193,7 +156,7 @@ impl RaderBot {
 
             // Call stop on strategy to update strategy internal state
             if let Some(strategy) = self.get_strategy(strategy_id) {
-                summary = Some(strategy.stop(trades).await);
+                summary = Some(strategy.stop(account, close_positions).await);
             }
         };
 

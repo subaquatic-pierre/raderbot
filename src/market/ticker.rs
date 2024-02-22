@@ -170,12 +170,21 @@ impl Ticker {
         })
     }
 
-    pub fn from_bingx_lookup(lookup: HashMap<String, Value>) -> ApiResult<Self> {
-        let data = lookup.get("data").ok_or_else(|| {
-            // Create an error message or construct an error type
-            "Missing 'data' key from data ticker lookup".to_string()
-        })?;
-        let data: HashMap<String, Value> = serde_json::from_value(data.to_owned()).unwrap();
+    pub fn from_bingx_lookup(data: HashMap<String, Value>) -> ApiResult<Self> {
+        //  {
+        //       "symbol": "BTC-USDT",
+        //       "priceChange": "52.5",
+        //       "priceChangePercent": "0.31",
+        //       "lastPrice": "16880.5",
+        //       "lastQty": "2.2238",
+        //       "highPrice": "16897.5",
+        //       "lowPrice": "16726.0",
+        //       "volume": "245870.1692",
+        //       "quoteVolume": "4151395117.73",
+        //       "openPrice": "16832.0",
+        //       "openTime": 1672026667803,
+        //       "closeTime": 1672026648425
+        //  }
 
         let symbol = data
             .get("symbol")
@@ -224,25 +233,6 @@ impl Ticker {
                 // Create an error message or construct an error type
                 "Unable to 'as_u64' from 'closeTime' key in data ticker lookup".to_string()
             })?;
-
-        // {
-        //     "code": 0,
-        //     "msg": "",
-        //     "data": {
-        //       "symbol": "BTC-USDT",
-        //       "priceChange": "52.5",
-        //       "priceChangePercent": "0.31",
-        //       "lastPrice": "16880.5",
-        //       "lastQty": "2.2238",
-        //       "highPrice": "16897.5",
-        //       "lowPrice": "16726.0",
-        //       "volume": "245870.1692",
-        //       "quoteVolume": "4151395117.73",
-        //       "openPrice": "16832.0",
-        //       "openTime": 1672026667803,
-        //       "closeTime": 1672026648425
-        //     }
-        //   }
 
         Ok(Self {
             time,

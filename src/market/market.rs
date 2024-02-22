@@ -1,6 +1,7 @@
 use env_logger::init;
 use futures::StreamExt;
 
+use log::info;
 use serde::{Deserialize, Serialize};
 
 use std::time::{Duration, SystemTime};
@@ -64,16 +65,9 @@ impl Market {
     // ---
 
     pub async fn last_price(&self, symbol: &str) -> Option<f64> {
-        let ticker = match self.data.lock().await.ticker_data(symbol) {
-            Some(ticker) => Some(ticker.ticker),
-            None => {
-                let ticker = match self.exchange_api.get_ticker(symbol).await {
-                    Ok(ticker) => Some(ticker),
-                    Err(_) => None,
-                };
-                ticker
-            }
-        };
+        let ticker = self.ticker_data(symbol).await;
+
+        info!("Ticker: {ticker:?}");
 
         ticker.map(|ticker| ticker.last_price)
     }
@@ -83,6 +77,20 @@ impl Market {
             Ok(kline) => Some(kline),
             Err(_) => None,
         }
+    }
+
+    pub async fn ticker_data(&self, symbol: &str) -> Option<Ticker> {
+        let ticker_data = match self.data.lock().await.ticker_data(symbol) {
+            Some(ticker) => Some(ticker),
+            None => {
+                let ticker_data = match self.exchange_api.get_ticker(symbol).await {
+                    Ok(ticker) => Some(TickerData::new(symbol, ticker)),
+                    Err(_) => None,
+                };
+                ticker_data
+            }
+        };
+        ticker_data.map(|ticker| ticker.ticker)
     }
 
     pub async fn kline_data_range(
@@ -97,11 +105,6 @@ impl Market {
             .lock()
             .await
             .kline_data(symbol, interval, from_ts, to_ts, limit)
-    }
-
-    pub async fn ticker_data(&self, symbol: &str) -> Option<Ticker> {
-        let ticker_data = self.data.lock().await.ticker_data(symbol);
-        ticker_data.map(|ticker| ticker.ticker)
     }
 
     pub async fn market_data(&self) -> ArcMutex<MarketData> {
@@ -155,8 +158,8 @@ impl Market {
 
     async fn init(&self) {
         // Add initial needed streams
-        self.add_needed_stream("BTC-USDT", StreamType::Ticker, None)
-            .await;
+        // self.add_needed_stream("BTC-USDT", StreamType::Ticker, None)
+        //     .await;
 
         self.init_market_receivers().await;
         self.init_active_stream_monitor().await;

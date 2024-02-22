@@ -99,6 +99,29 @@ impl Account {
         self.trades.clone()
     }
 
+    pub fn strategy_positions_trades(
+        &self,
+        strategy_id: StrategyId,
+    ) -> (Vec<Position>, Vec<TradeTx>) {
+        // Get all positions associated with the strategy after
+        // positions have been closed, this Vec should be empty
+        let positions: Vec<Position> = self
+            .strategy_positions(strategy_id)
+            .iter()
+            .map(|&p| p.clone())
+            .collect();
+
+        // Get all trades associated with this strategy
+        // Used to calculate strategy summary
+        let trades: Vec<TradeTx> = self
+            .strategy_trades(strategy_id)
+            .iter()
+            .map(|&t| t.clone())
+            .collect();
+
+        (positions, trades)
+    }
+
     pub fn strategy_positions(&self, strategy_id: StrategyId) -> Vec<&Position> {
         let mut positions = vec![];
         for pos in self.positions.values() {

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use futures_util::SinkExt;
-use log::warn;
+use log::{info, warn};
 
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::{Client, Response};
@@ -33,6 +33,7 @@ use super::types::{ApiResult, StreamType};
 
 const BING_X_WS_HOST_URL: &str = "wss://open-api-swap.bingx.com/swap-market";
 const BING_X_HOST_URL: &str = "https://open-api.bingx.com";
+const API_VERSION: &str = "v3";
 
 pub struct BingXApi {
     ws_host: String,
@@ -61,20 +62,6 @@ impl BingXApi {
             secret_key: secret_key.to_string(),
             stream_manager,
         }
-    }
-
-    pub fn parse_kline(res_str: &str, symbol: &str, interval: &str) -> ApiResult<Kline> {
-        let lookup: HashMap<String, Value> = serde_json::from_str(res_str).unwrap();
-
-        // build kline from hashmap
-        Kline::from_bingx_lookup(lookup, symbol, interval)
-    }
-
-    pub fn parse_ticker(res_str: &str) -> ApiResult<Ticker> {
-        let lookup: HashMap<String, Value> = serde_json::from_str(res_str).unwrap();
-
-        // build kline from hashmap
-        Ticker::from_bingx_lookup(lookup)
     }
 
     fn build_headers(&self, json: bool) -> HeaderMap {
@@ -409,11 +396,18 @@ pub async fn get_bingx_kline(symbol: &str, interval: &str) -> ApiResult<Kline> {
     } else {
         interval.to_string()
     };
+    let ts = generate_ts().to_string();
 
     let client = reqwest::Client::new();
-    let query_str = QueryStr::new(vec![("symbol", symbol), ("interval", &_interval)]);
+    let query_str = QueryStr::new(vec![
+        ("symbol", symbol),
+        ("interval", &_interval),
+        ("timestamp", &ts),
+        ("limit", "1"),
+    ]);
+
     let url: String = format!(
-        "{}/openApi/swap/v2/quote/klines?{}",
+        "{}/openApi/swap/v3/quote/klines?{}",
         BING_X_HOST_URL,
         query_str.to_string()
     );
@@ -422,14 +416,27 @@ pub async fn get_bingx_kline(symbol: &str, interval: &str) -> ApiResult<Kline> {
 
     let kline_str = res.json::<Value>().await?.to_string();
 
-    let kline = BingXApi::parse_kline(&kline_str, symbol, interval)?;
+    // build kline from hashmap
+    let lookup: HashMap<String, Value> = serde_json::from_str(&kline_str).unwrap();
+
+    let data = lookup.get("data").ok_or_else(|| {
+        // Create an error message or construct an error type
+        "Missing 'data' key from data kline lookup".to_string()
+    })?;
+
+    let data: Vec<Value> = serde_json::from_value(data.to_owned())?;
+    let data = data[0].clone();
+    let data: HashMap<String, Value> = serde_json::from_value(data.to_owned())?;
+
+    let kline = Kline::from_bingx_lookup(data, symbol, interval)?;
 
     Ok(kline)
 }
 
 pub async fn get_bingx_ticker(symbol: &str) -> ApiResult<Ticker> {
     let client = reqwest::Client::new();
-    let query_str = QueryStr::new(vec![("symbol", symbol)]);
+    let ts = generate_ts().to_string();
+    let query_str = QueryStr::new(vec![("symbol", symbol), ("timestamp", &ts)]);
     let url = format!(
         "{}/openApi/swap/v2/quote/ticker?{}",
         BING_X_HOST_URL,
@@ -440,7 +447,15 @@ pub async fn get_bingx_ticker(symbol: &str) -> ApiResult<Ticker> {
 
     let ticker_str = res.json::<Value>().await?.to_string();
 
-    let ticker = BingXApi::parse_ticker(&ticker_str)?;
+    let lookup: HashMap<String, Value> = serde_json::from_str(&ticker_str).unwrap();
+    let data = lookup.get("data").ok_or_else(|| {
+        // Create an error message or construct an error type
+        "Missing 'data' key from data ticker lookup".to_string()
+    })?;
+    let data: HashMap<String, Value> = serde_json::from_value(data.to_owned()).unwrap();
+
+    // build kline from hashmap
+    let ticker = Ticker::from_bingx_lookup(data)?;
 
     Ok(ticker)
 }

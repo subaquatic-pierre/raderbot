@@ -5,7 +5,11 @@ use tokio::time;
 use uuid::Uuid;
 
 use crate::{
-    account::trade::{OrderSide, TradeTx},
+    account::{
+        self,
+        account::Account,
+        trade::{OrderSide, Position, TradeTx},
+    },
     market::{
         kline::Kline,
         market::Market,
@@ -138,15 +142,46 @@ impl Strategy {
         })
     }
 
-    pub async fn stop(&mut self, trades: Vec<TradeTx>) -> StrategySummary {
+    pub async fn stop(
+        &mut self,
+        account: ArcMutex<Account>,
+        close_positions: bool,
+    ) -> StrategySummary {
+        // Get all positions associated with the strategy
+        let positions: Vec<Position> = account
+            .lock()
+            .await
+            .strategy_positions(self.id)
+            .iter()
+            .map(|&p| p.clone())
+            .collect();
+
+        // Close all positions on account attached to this strategy
+        if close_positions {
+            for position in positions {
+                if let Some(close_price) =
+                    self.market.lock().await.last_price(&position.symbol).await
+                {
+                    account
+                        .lock()
+                        .await
+                        .close_position(position.id, close_price)
+                        .await;
+                }
+            }
+        }
+
+        let (positions, trades) = account.lock().await.strategy_positions_trades(self.id);
+
         self.end_time = Some(timestamp_to_string(generate_ts()));
         self.running = false;
 
-        self.calc_summary(&trades).await
+        self.calc_summary(&trades, &positions).await
     }
 
-    pub async fn summary(&self, trades: Vec<TradeTx>) -> StrategySummary {
-        self.calc_summary(&trades).await
+    pub async fn summary(&self, account: ArcMutex<Account>) -> StrategySummary {
+        let (positions, trades) = account.lock().await.strategy_positions_trades(self.id);
+        self.calc_summary(&trades, &positions).await
     }
 
     pub fn settings(&self) -> StrategySettings {
@@ -183,7 +218,11 @@ impl Strategy {
     // Private Methods
     // ---
 
-    async fn calc_summary(&self, trades: &Vec<TradeTx>) -> StrategySummary {
+    async fn calc_summary(
+        &self,
+        trades: &Vec<TradeTx>,
+        positions: &Vec<Position>,
+    ) -> StrategySummary {
         let max_profit = Strategy::calc_max_profit(&trades);
         let max_drawdown = Strategy::calc_max_drawdown(&trades);
         let long_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Long);
@@ -212,7 +251,8 @@ impl Strategy {
         StrategySummary {
             info: self.info().await,
             profit: profit,
-            // trades,
+            trades: trades.clone(),
+            positions: positions.clone(),
             long_trade_count,
             short_trade_count,
             // signals,
@@ -325,7 +365,8 @@ impl Default for StrategySettings {
 pub struct StrategySummary {
     pub info: StrategyInfo,
     pub profit: f64,
-    // pub trades: Vec<TradeTx>,
+    pub trades: Vec<TradeTx>,
+    pub positions: Vec<Position>,
     // pub signals: Vec<SignalMessage>,
     pub long_trade_count: usize,
     pub short_trade_count: usize,
@@ -343,6 +384,8 @@ impl Default for StrategySummary {
         Self {
             info: StrategyInfo::default(),
             profit: 0.0,
+            trades: vec![],
+            positions: vec![],
             long_trade_count: 0,
             short_trade_count: 0,
             period_start_price: 0.0,

@@ -126,7 +126,8 @@ impl BackTest {
         StrategySummary {
             info,
             profit,
-            // trades,
+            trades,
+            positions: vec![],
             long_trade_count,
             short_trade_count,
             // signals,

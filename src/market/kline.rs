@@ -1,3 +1,4 @@
+use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -181,7 +182,7 @@ impl Kline {
     }
 
     pub fn from_bingx_lookup(
-        lookup: HashMap<String, Value>,
+        data: HashMap<String, Value>,
         symbol: &str,
         interval: &str,
     ) -> ApiResult<Self> {
@@ -193,12 +194,6 @@ impl Kline {
         //     "volume": "float64",
         //     "time": "int64"
         //   }
-
-        let data = lookup.get("data").ok_or_else(|| {
-            // Create an error message or construct an error type
-            "Missing 'data' key from data kline lookup".to_string()
-        })?;
-        let data: HashMap<String, Value> = serde_json::from_value(data.to_owned())?;
 
         let close_time = data
             .get("time")

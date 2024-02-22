@@ -115,29 +115,13 @@ async fn active_strategy_summary(
     let account = bot.account.clone();
 
     if let Some(strategy) = bot.get_strategy(body.strategy_id) {
-        let positions: Vec<Position> = account
-            .lock()
-            .await
-            .strategy_positions(body.strategy_id)
-            .iter()
-            .map(|&el| el.clone())
-            .collect();
-
-        let trades: Vec<TradeTx> = account
-            .lock()
-            .await
-            .strategy_trades(body.strategy_id)
-            .iter()
-            .map(|&el| el.clone())
-            .collect();
-
-        let info = strategy.info().await;
-        let json_data = json!({ "strategy_info": info, "positions": positions, "trades": trades });
+        let summary = strategy.summary(account).await;
+        let json_data = json!({ "strategy_summary": summary });
 
         return HttpResponse::Ok().json(json_data);
     };
 
-    let json_data = json!({ "error": "Unable to find strategy" });
+    let json_data = json!({ "error": "Unable to find strategy", "strategy_id": body.strategy_id });
 
     HttpResponse::ExpectationFailed().json(json_data)
 }
