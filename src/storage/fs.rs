@@ -18,6 +18,8 @@ use crate::utils::time::generate_ts;
 
 use super::manager::StorageManager;
 
+/// Represents a file system-based storage manager for managing klines and strategy summaries.
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FsStorageManager {
     app_directory: PathBuf,
@@ -25,6 +27,12 @@ pub struct FsStorageManager {
 }
 
 impl FsStorageManager {
+    /// Creates a new instance of `FsStorageManager` with a specified data directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `data_directory` - A path reference that specifies where to store the data.
+
     pub fn new(data_directory: impl AsRef<Path>) -> Self {
         let app_directory = Self::create_app_directory();
         let data_directory = app_directory.join(data_directory);
@@ -38,6 +46,16 @@ impl FsStorageManager {
             data_directory,
         }
     }
+
+    /// Loads klines from a specified file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filename` - The name of the file to load klines from.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `Option` that contains a vector of `Kline` if the file exists and is successfully read; otherwise `None`.
 
     pub fn _load_klines(&self, filename: &str) -> Option<Vec<Kline>> {
         let mut market_dir = self.data_directory.join("market");
@@ -64,6 +82,12 @@ impl FsStorageManager {
         }
     }
 
+    /// Creates the application directory in the user's home directory if it doesn't already exist.
+    ///
+    /// # Returns
+    ///
+    /// Returns the path to the application directory.
+
     fn create_app_directory() -> PathBuf {
         let user_dirs = UserDirs::new().expect("Failed to get user directories");
         let home_dir = user_dirs.home_dir();
@@ -75,6 +99,16 @@ impl FsStorageManager {
 
         app_directory
     }
+
+    /// Builds the file path for storing strategy summary based on the strategy ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy_id` - The unique identifier of the strategy.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the file path if successful, or an error if not.
 
     fn strategy_summary_filepath(
         &self,
@@ -109,6 +143,17 @@ impl Default for FsStorageManager {
 }
 
 impl StorageManager for FsStorageManager {
+    /// Saves klines to the file system.
+    ///
+    /// # Arguments
+    ///
+    /// * `klines` - A slice of `Kline` to be saved.
+    /// * `kline_key` - A string slice that represents the key associated with the klines.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `io::Result<()>` indicating the outcome of the operation.
+
     fn save_klines(&self, klines: &[Kline], kline_key: &str) -> io::Result<()> {
         // Build market directory and subdirectory for klines
         let mut market_dir = self.data_directory.join("market");
@@ -175,6 +220,20 @@ impl StorageManager for FsStorageManager {
         Ok(())
     }
 
+    /// Retrieves klines based on the specified criteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The symbol associated with the klines.
+    /// * `interval` - The interval of the klines.
+    /// * `from_ts` - Optional start timestamp for filtering.
+    /// * `to_ts` - Optional end timestamp for filtering.
+    /// * `_limit` - Optional limit on the number of klines to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `Kline` that match the criteria.
+
     fn get_klines(
         &self,
         symbol: &str,
@@ -213,6 +272,16 @@ impl StorageManager for FsStorageManager {
         filtered_klines
     }
 
+    /// Saves a strategy summary to the file system.
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - The `StrategySummary` to be saved.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating the outcome of the operation.
+
     fn save_strategy_summary(&self, summary: StrategySummary) -> Result<(), Box<dyn Error>> {
         let filepath = self.strategy_summary_filepath(summary.info.id)?;
         let json_str = serde_json::to_string(&summary)?;
@@ -223,6 +292,12 @@ impl StorageManager for FsStorageManager {
 
         Ok(())
     }
+
+    /// Lists all saved strategy summaries.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing a vector of `StrategyInfo` if successful, or an error if not.
 
     fn list_saved_strategies(&self) -> Result<Vec<StrategyInfo>, Box<dyn Error>> {
         let mut data = vec![];
@@ -246,6 +321,16 @@ impl StorageManager for FsStorageManager {
 
         Ok(data)
     }
+
+    /// Retrieves a strategy summary based on a strategy ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy_id` - The unique identifier of the strategy.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the `StrategySummary` if found, or an error if not.
 
     fn get_strategy_summary(
         &self,

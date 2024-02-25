@@ -16,6 +16,12 @@ use crate::{
     utils::channel::build_arc_channel,
 };
 
+/// Represents a backtest environment for a trading strategy.
+///
+/// This struct encapsulates the logic to simulate the execution of a trading strategy over
+/// historical data. It includes methods to run the backtest, add trading signals generated during
+/// the backtest, and compute a summary of the backtest results.
+
 pub struct BackTest {
     pub strategy: Strategy,
     pub signals: Vec<SignalMessage>,
@@ -26,6 +32,17 @@ pub struct BackTest {
 }
 
 impl BackTest {
+    /// Creates a new `BackTest` instance for a given trading strategy.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy` - The trading strategy to backtest.
+    /// * `_initial_balance` - An optional initial balance for the backtest account (not currently used).
+    ///
+    /// # Returns
+    ///
+    /// Returns a new instance of `BackTest`.
+
     pub async fn new(strategy: Strategy, _initial_balance: Option<f64>) -> Self {
         let (_, market_rx) = build_arc_channel::<MarketMessage>();
         let exchange_api: Arc<Box<dyn ExchangeApi>> =
@@ -60,6 +77,12 @@ impl BackTest {
         }
     }
 
+    /// Executes the backtest over a set of historical k-line data.
+    ///
+    /// # Arguments
+    ///
+    /// * `kline_data` - Historical k-line data over which the backtest will be run.
+
     pub async fn run(&mut self, kline_data: KlineData) {
         if let Some(first) = kline_data.klines.first() {
             self.period_start_price = first.open
@@ -92,9 +115,22 @@ impl BackTest {
         }
     }
 
+    /// Adds a trading signal to the backtest.
+    ///
+    /// # Arguments
+    ///
+    /// * `signal` - The trading signal to add.
+
     pub fn add_signal(&mut self, signal: SignalMessage) {
         self.signals.push(signal)
     }
+
+    /// Computes and returns a summary of the backtest results.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `StrategySummary` detailing the results of the backtest, including profit, drawdown,
+    /// trade counts, and other relevant metrics.
 
     pub async fn result(&mut self) -> StrategySummary {
         for signal in &self.signals {

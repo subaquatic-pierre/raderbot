@@ -12,6 +12,12 @@ use super::{
     types::SignalMessage,
 };
 
+/// Manages the handling of trading signals for active trading strategies.
+///
+/// This manager is responsible for executing trading signals by opening or closing positions
+/// based on the strategy's settings and the nature of the incoming signal. It interacts with
+/// both the account to manage positions and the market to fetch current prices.
+
 pub struct SignalManager {
     account: ArcMutex<Account>,
     market: ArcMutex<Market>,
@@ -19,6 +25,17 @@ pub struct SignalManager {
 }
 
 impl SignalManager {
+    /// Initializes a new `SignalManager` with references to the account and market.
+    ///
+    /// # Arguments
+    ///
+    /// * `account` - A shared, thread-safe reference to the trading account.
+    /// * `market` - A shared, thread-safe reference to the market data.
+    ///
+    /// # Returns
+    ///
+    /// Returns an instance of `SignalManager`.
+
     pub fn new(account: ArcMutex<Account>, market: ArcMutex<Market>) -> Self {
         Self {
             account,
@@ -26,6 +43,15 @@ impl SignalManager {
             active_strategy_settings: HashMap::new(),
         }
     }
+
+    /// Processes a trading signal, potentially opening or closing positions based on the strategy's settings.
+    ///
+    /// # Arguments
+    ///
+    /// * `signal` - The trading signal to process.
+    ///
+    /// This method considers the current active positions, the strategy settings, and the nature of the signal
+    /// to decide on the appropriate trading action.
 
     pub async fn handle_signal(&mut self, signal: SignalMessage) {
         let active_positions: Vec<Position> = self
@@ -113,9 +139,26 @@ impl SignalManager {
         }
     }
 
+    /// Adds settings for a trading strategy to the manager.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy_id` - The unique identifier of the strategy.
+    /// * `settings` - The trading settings for the strategy.
+    ///
+    /// This allows the `SignalManager` to enforce strategy-specific trading parameters.
+
     pub fn add_strategy_settings(&mut self, strategy_id: StrategyId, settings: StrategySettings) {
         self.active_strategy_settings.insert(strategy_id, settings);
     }
+
+    /// Removes the trading settings associated with a strategy from the manager.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy_id` - The unique identifier of the strategy whose settings are to be removed.
+    ///
+    /// This is used when a strategy is no longer active or has been removed.
 
     pub fn remove_strategy_settings(&mut self, strategy_id: StrategyId) {
         self.active_strategy_settings.remove(&strategy_id);
