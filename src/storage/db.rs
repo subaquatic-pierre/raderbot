@@ -1,7 +1,7 @@
 use super::manager::StorageManager;
 use crate::{
     market::kline::Kline,
-    strategy::strategy::{StrategyId, StrategySummary},
+    strategy::strategy::{StrategyId, StrategyInfo, StrategySummary},
 };
 use std::error::Error;
 
@@ -23,7 +23,7 @@ impl StorageManager for DbStorageManager {
         unimplemented!()
     }
 
-    fn list_all_saved_strategy_summaries(&self) -> Result<Vec<StrategySummary>, Box<dyn Error>> {
+    fn list_saved_strategies(&self) -> Result<Vec<StrategyInfo>, Box<dyn Error>> {
         unimplemented!()
     }
     fn save_strategy_summary(&self, _summary: StrategySummary) -> Result<(), Box<dyn Error>> {

@@ -5,9 +5,7 @@ use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    account::{
-        account::Account,
-    },
+    account::account::Account,
     exchange::{api::ExchangeApi, bingx::BingXApi, mock::MockExchangeApi},
     market::{
         market::Market,
@@ -190,10 +188,8 @@ impl RaderBot {
         self.strategies.get_mut(&strategy_id)
     }
 
-    pub fn list_historical_strategies(&mut self) -> Option<Vec<StrategySummary>> {
-        self.storage_manager
-            .list_all_saved_strategy_summaries()
-            .ok()
+    pub fn list_historical_strategies(&mut self) -> Option<Vec<StrategyInfo>> {
+        self.storage_manager.list_saved_strategies().ok()
     }
 
     pub fn get_historical_strategy_summary(

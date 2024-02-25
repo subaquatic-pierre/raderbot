@@ -1,3 +1,12 @@
+//! # RaderBot Application
+//!
+//! This is the main entry point for the RaderBot application. It initializes and runs
+//! the web server, setting up all necessary services and routes for the application's API.
+//! The application leverages Actix Web for its web server and API functionalities,
+//! dotenv for environment variable management, and various internal modules to handle
+//! different aspects of the trading bot's operations, such as account management,
+//! market data processing, and executing trading strategies.
+
 use app::new_app_state;
 use dotenv::dotenv;
 use std::io;
@@ -22,16 +31,29 @@ mod exchange;
 mod market;
 mod storage;
 mod strategy;
-mod trade;
 mod utils;
 
+/// Server host configuration (IP address and port).
 const SERVER_HOST: (&str, u16) = ("127.0.0.1", 3000);
 
-#[derive(Debug)]
-pub struct Message {
-    pub int: String,
-}
-
+/// The main function serves as the entry point of the application.
+/// It performs initial setup, including loading environment variables, initializing logging,
+/// creating application state, and starting the HTTP server with all the configured services.
+///
+/// # Errors
+///
+/// This function will return an `io::Error` if there's an issue binding the server to the specified address
+/// or if any other issue occurs while starting the server.
+///
+/// # Examples
+///
+/// This function is called when the application starts:
+/// ```
+/// #[actix_web::main]
+/// async fn main() -> std::io::Result<()> {
+///     // Function body here
+/// }
+/// ```
 // Define the main entry point for the trading bot
 #[actix_web::main]
 

@@ -1,4 +1,3 @@
-
 use futures::StreamExt;
 
 use log::info;
@@ -67,8 +66,6 @@ impl Market {
 
     pub async fn last_price(&self, symbol: &str) -> Option<f64> {
         let ticker = self.ticker_data(symbol).await;
-
-        info!("Ticker: {ticker:?}");
 
         ticker.map(|ticker| ticker.last_price)
     }

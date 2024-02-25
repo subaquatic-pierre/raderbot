@@ -1,7 +1,7 @@
-
 use std::error::Error;
 use std::io::{self};
 
+use crate::strategy::strategy::StrategyInfo;
 use crate::{
     market::kline::Kline,
     strategy::strategy::{StrategyId, StrategySummary},
@@ -19,7 +19,7 @@ pub trait StorageManager: Send + Sync {
         limit: Option<usize>,
     ) -> Vec<Kline>;
 
-    fn list_all_saved_strategy_summaries(&self) -> Result<Vec<StrategySummary>, Box<dyn Error>>;
+    fn list_saved_strategies(&self) -> Result<Vec<StrategyInfo>, Box<dyn Error>>;
     fn save_strategy_summary(&self, summary: StrategySummary) -> Result<(), Box<dyn Error>>;
     fn get_strategy_summary(
         &self,

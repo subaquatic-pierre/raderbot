@@ -28,7 +28,6 @@ impl SignalManager {
     }
 
     pub async fn handle_signal(&mut self, signal: SignalMessage) {
-        info!("Signal: {signal:?}");
         let active_positions: Vec<Position> = self
             .account
             .lock()
@@ -46,8 +45,6 @@ impl SignalManager {
             self.market.lock().await.last_price(&signal.symbol).await
         };
 
-        info!("Trigger Price: {signal:?}");
-
         if self
             .active_strategy_settings
             .get(&signal.strategy_id)
@@ -61,8 +58,6 @@ impl SignalManager {
             .active_strategy_settings
             .get(&signal.strategy_id)
             .unwrap();
-
-        info!("Strategy Settings: {settings:?}");
 
         // get last open position
         if let Some(last) = active_positions.last() {

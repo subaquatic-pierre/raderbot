@@ -3,7 +3,9 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- [Features](#features)
+- [Account Features](#account-features)
+- [Market Data Features](#market-data-features)
+- [Strategy Management Features](#strategy-management-features)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
@@ -12,15 +14,76 @@
 
 Raderbot is a Rust-based trading bot designed to interact with the BingX WebSocket API for market data analysis and trading operations. It utilizes the Actix Web framework for building a WebSocket server and handling incoming messages. The bot connects to the BingX WebSocket API to receive real-time market data updates, including ticker information. It performs various operations on the received data, such as calculating time differences, generating unique identifiers, parsing JSON responses, and handling errors using custom error types. The bot also includes functionalities for file operations, such as creating and appending data to files. It leverages external crates like reqwest for making HTTP requests and tungstenite for WebSocket communication.
 
-## Features
+## Account Features
 
-- Connects to the BingX WebSocket API to receive real-time market data updates.
-- Calculates time differences between timestamps.
-- Generates unique identifiers in a specific format.
-- Parses JSON responses received from API calls.
-- Handles errors using custom error types.
-- Performs file operations, including creating and appending data to files.
-- Utilizes external crates like reqwest and tungstenite.
+### Position Management
+
+- **Open Positions**: Allows opening positions with detailed parameters (symbol, margin, leverage, order side, and optional stop loss).
+- **Close Position**: Enables closing an individual position using its ID, with automatic handling of price lookup and trade execution.
+- **Close All Positions**: Offers the capability to close all open positions with a single request, facilitating quick portfolio adjustments or strategy changes.
+
+### Account Information Retrieval
+
+- **Account Snapshot**: Provides real-time account information, including current holdings, positions, and trading capabilities.
+- **List Active Positions**: Lists all active positions to provide insights into market exposure and position specifics.
+- **Recent Trades**: Retrieves a list of recent trades, aiding in the analysis of trading performance and strategy outcomes.
+
+### Exchange API Flexibility
+
+- **Dynamic API Switching**: Features an endpoint to dynamically set the exchange API, supporting transitions between live and mock environments or different exchanges without downtime.
+- **Multiple Exchange Support**: Accommodates various exchange APIs, including a mock interface for risk-free testing and strategy development.
+
+### Real-time Market Data Integration
+
+- Leverages live market data for informed decision-making in trading operations, ensuring that actions reflect the latest market conditions.
+
+### Safety Features
+
+- **Stop Loss Functionality**: Incorporates stop-loss options in position opening, enhancing risk management through predefined loss limits.
+- **Robust Error Handling**: Delivers comprehensive error handling and response messaging, clearly indicating the outcomes of API requests.
+
+## Market Data Features
+
+### Kline Data
+
+- **Retrieve Kline Data**: Fetch historical k-line (candlestick) data for a given symbol and interval, allowing users to analyze past market movements.
+- **Range-based Kline Data Retrieval**: Obtain k-line data within a specified date range, supporting in-depth analysis and backtesting strategies over specific periods.
+
+### Ticker Data
+
+- **Last Price Query**: Access the most recent trading price for a specified symbol, crucial for real-time decision making.
+- **Ticker Data Access**: Get detailed ticker information, including price changes, high, low, and volume data, providing a comprehensive market overview.
+
+### Stream Management
+
+- **Open Data Stream**: Initiate a live data stream for k-lines or ticker updates, enabling real-time market monitoring and analysis.
+- **Close Data Stream**: Terminate an active data stream, managing resource usage and focusing on relevant market data.
+- **Active Streams Information**: List all active streams, offering insights into currently monitored symbols and intervals.
+
+### Market Information
+
+- **Market Summary**: Present a general market overview, including available symbols, trading pairs, and other relevant information, helping users stay informed about market conditions.
+
+## Strategy Management Features
+
+### Strategy Operations
+
+- **Create New Strategies**: Initiate new trading strategies with customized settings including symbols, strategy names, algorithm parameters, intervals, margins, and leverage.
+- **Stop Strategy**: Terminate an active strategy optionally closing all associated positions.
+- **List Strategy Positions**: Retrieve all positions opened under a specific strategy, facilitating detailed performance analysis.
+- **Active Strategy Summary**: Generate summaries for active strategies, providing insights into their current state and effectiveness.
+- **Strategy Information**: Fetch detailed information about specific strategies, including configuration and performance metrics.
+- **List Active and Historical Strategies**: View active strategies for ongoing monitoring and historical strategies for post-analysis.
+- **Stop All Strategies**: Conveniently stop all active strategies with an option to close all positions, useful for rapid response to market changes or strategy realignment.
+
+### Strategy Configuration
+
+- **Set Strategy Parameters**: Dynamically adjust strategy parameters to adapt to changing market conditions or refine strategy logic.
+- **Change Strategy Settings**: Modify strategy settings such as maximum open orders, margin, leverage, and stop-loss thresholds.
+
+### Strategy Testing
+
+- **Run Backtest**: Perform backtesting on strategies with specific parameters over designated time frames, aiding in strategy validation and optimization.
 
 ## Roadmap
 

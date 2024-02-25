@@ -8,7 +8,7 @@ use actix_web::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::account::trade::{Position};
+use crate::account::trade::Position;
 use crate::app::AppState;
 use crate::strategy::strategy::{StrategyId, StrategySettings};
 use crate::utils::time::string_to_timestamp;
@@ -169,7 +169,7 @@ async fn list_historical_strategies(app_data: web::Data<AppState>) -> impl Respo
 
     let summaries = bot.lock().await.list_historical_strategies();
 
-    let json_data = json!({ "strategy_summaries": summaries });
+    let json_data = json!({ "strategy_infos": summaries });
 
     HttpResponse::Ok().json(json_data)
 }

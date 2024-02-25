@@ -10,7 +10,7 @@ use std::io::{self};
 use std::path::{Path, PathBuf};
 
 use crate::market::kline::Kline;
-use crate::strategy::strategy::{StrategyId, StrategySummary};
+use crate::strategy::strategy::{StrategyId, StrategyInfo, StrategySummary};
 use crate::utils::kline::{
     build_kline_filename, build_kline_key, generate_kline_filenames_in_range,
 };
@@ -224,8 +224,8 @@ impl StorageManager for FsStorageManager {
         Ok(())
     }
 
-    fn list_all_saved_strategy_summaries(&self) -> Result<Vec<StrategySummary>, Box<dyn Error>> {
-        let mut data: Vec<StrategySummary> = vec![];
+    fn list_saved_strategies(&self) -> Result<Vec<StrategyInfo>, Box<dyn Error>> {
+        let mut data = vec![];
 
         let data_dir = self.data_directory.join("strategies");
 
@@ -238,7 +238,7 @@ impl StorageManager for FsStorageManager {
                         let file_content = fs::read_to_string(path)?;
                         let strategy_summary: StrategySummary =
                             serde_json::from_str(&file_content)?;
-                        data.push(strategy_summary);
+                        data.push(strategy_summary.info);
                     }
                 }
             }

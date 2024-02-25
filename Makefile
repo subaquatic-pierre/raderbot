@@ -19,3 +19,9 @@ test:
 
 clean:
 	cargo clean
+
+docs:
+	cargo doc --no-deps
+
+serve-docs:
+	python -m http.server --directory ./target/doc 3001
