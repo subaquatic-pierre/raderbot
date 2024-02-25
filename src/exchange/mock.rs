@@ -15,6 +15,25 @@ pub struct MockExchangeApi {}
 
 #[async_trait]
 impl ExchangeApi for MockExchangeApi {
+    /// Simulates opening a position on the exchange for testing purposes.
+    ///
+    /// This function mimics the behavior of opening a position based on the provided parameters. It's
+    /// used for testing scenarios without interacting with a real exchange. It constructs and returns
+    /// a mock position object.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - A string slice representing the trading pair or market symbol.
+    /// * `margin_usd` - A floating-point number representing the amount of margin used for the position in USD.
+    /// * `leverage` - An unsigned 32-bit integer representing the leverage applied to the position.
+    /// * `order_side` - An `OrderSide` enum value indicating whether the position is a buy or sell.
+    /// * `open_price` - A floating-point number representing the price at which the position is opened.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Position>`, which is a custom result type. On success, it contains the
+    /// mock `Position` object. On failure, it contains an error.
+
     async fn open_position(
         &self,
         symbol: &str,
@@ -26,10 +45,45 @@ impl ExchangeApi for MockExchangeApi {
         let position = Position::new(symbol, open_price, order_side, margin_usd, leverage, None);
         Ok(position)
     }
+
+    /// Simulates closing a position on the exchange for testing purposes.
+    ///
+    /// This function mimics the behavior of closing a position and calculating the resulting trade
+    /// transaction. It's used for testing purposes to simulate exchange interaction without making
+    /// actual network requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - A `Position` object representing the position to be closed.
+    /// * `close_price` - A floating-point number representing the price at which the position is closed.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<TradeTx>`, which encapsulates the result of the mock close operation. On
+    /// success, it contains a `TradeTx` object representing the trade transaction details. On failure,
+    /// it contains an error.
+
     async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx> {
         let trade_tx = TradeTx::new(close_price, generate_ts(), position);
         Ok(trade_tx)
     }
+
+    /// Simulates closing a position on the exchange for testing purposes.
+    ///
+    /// This function mimics the behavior of closing a position and calculating the resulting trade
+    /// transaction. It's used for testing purposes to simulate exchange interaction without making
+    /// actual network requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - A `Position` object representing the position to be closed.
+    /// * `close_price` - A floating-point number representing the price at which the position is closed.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<TradeTx>`, which encapsulates the result of the mock close operation. On
+    /// success, it contains a `TradeTx` object representing the trade transaction details. On failure,
+    /// it contains an error.
 
     async fn info(&self) -> ApiResult<ExchangeInfo> {
         Ok(ExchangeInfo {
@@ -78,6 +132,7 @@ impl Default for MockExchangeApi {
         Self {}
     }
 }
+
 #[cfg(test)]
 mod test {
     use super::*;

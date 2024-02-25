@@ -11,13 +11,25 @@ use uuid::Uuid;
 
 pub type PositionId = Uuid;
 
+/// Enum representing the side of an order (Long or Short).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd, Copy)]
 pub enum OrderSide {
+    /// Represents a Long order side.
     Long,
+    /// Represents a Short order side.
     Short,
 }
 
 impl Display for OrderSide {
+    /// Formats the enum variant as a string.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The formatter.
+    ///
+    /// # Returns
+    ///
+    /// A `std::fmt::Result`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OrderSide::Long => f.write_str("Long"),
@@ -26,21 +38,46 @@ impl Display for OrderSide {
     }
 }
 
+/// Struct representing a trading position.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Position {
+    /// The unique identifier of the position.
     pub id: PositionId,
+    /// The symbol associated with the position.
     pub symbol: String,
+    /// The side of the order (Long or Short).
     pub order_side: OrderSide,
+    /// The time when the position was opened.
     pub open_time: String,
+    /// The price at which the position was opened.
     pub open_price: f64,
+    /// The quantity of the asset in the position.
     pub quantity: f64,
+    /// The margin used for the position in USD.
     pub margin_usd: f64,
+    /// The leverage used for the position.
     pub leverage: u32,
+    /// The optional strategy ID associated with the position.
     pub strategy_id: Option<StrategyId>,
+    /// The optional stop loss price for the position.
     pub stop_loss: Option<f64>,
 }
 
 impl Position {
+    /// Creates a new position with the given parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The symbol associated with the position.
+    /// * `open_price` - The price at which the position was opened.
+    /// * `order_side` - The side of the order (Long or Short).
+    /// * `margin_usd` - The margin used for the position in USD.
+    /// * `leverage` - The leverage used for the position.
+    /// * `stop_loss` - The optional stop loss price for the position.
+    ///
+    /// # Returns
+    ///
+    /// A new `Position` instance.
     pub fn new(
         symbol: &str,
         open_price: f64,
@@ -66,23 +103,52 @@ impl Position {
         }
     }
 
+    /// Sets the stop loss price for the position.
+    ///
+    /// # Arguments
+    ///
+    /// * `stop_loss` - The optional stop loss price for the position.
+
     pub fn set_stop_loss(&mut self, stop_loss: Option<f64>) {
         self.stop_loss = stop_loss
     }
+
+    /// Sets the strategy ID associated with the position.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy_id` - The optional strategy ID associated with the position.
+
     pub fn set_strategy_id(&mut self, strategy_id: Option<StrategyId>) {
         self.strategy_id = strategy_id
     }
 }
 
+/// Struct representing a trading transaction.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TradeTx {
+    /// The unique identifier of the trade transaction.
     pub id: Uuid,
+    /// The time when the position was closed.
     pub close_time: String,
+    /// The price at which the position was closed.
     pub close_price: f64,
+    /// The position associated with the trade transaction.
     pub position: Position,
 }
-
 impl TradeTx {
+    /// Creates a new trade transaction with the given parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `close_price` - The price at which the position was closed.
+    /// * `close_time` - The time when the position was closed.
+    /// * `position` - The position associated with the trade transaction.
+    ///
+    /// # Returns
+    ///
+    /// A new `TradeTx` instance.
+
     pub fn new(close_price: f64, close_time: u64, position: Position) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -91,6 +157,12 @@ impl TradeTx {
             position,
         }
     }
+
+    /// Calculates the profit of the trade transaction.
+    ///
+    /// # Returns
+    ///
+    /// The profit of the trade transaction.
 
     pub fn calc_profit(&self) -> f64 {
         let total_open_usd = self.position.open_price * self.position.quantity;

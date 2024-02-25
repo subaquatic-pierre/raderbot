@@ -28,6 +28,10 @@ use super::api::ExchangeInfo;
 use super::stream::{StreamManager, StreamMeta};
 use super::types::{ApiResult, StreamType};
 
+/// Represents the Binance API client for interacting with the Binance exchange.
+///
+/// This client provides methods for making API calls to Binance, handling requests and responses, and managing streams for real-time data. It encapsulates details such as the base URLs for REST and WebSocket endpoints, API keys for authentication, and a stream manager for handling data streams.
+
 pub struct BinanceApi {
     ws_host: String,
     host: String,
@@ -38,6 +42,20 @@ pub struct BinanceApi {
 }
 
 impl BinanceApi {
+    /// Creates a new instance of `BinanceApi`.
+    ///
+    /// Initializes the API client with API keys for authentication, sets up the HTTP client for making requests, and prepares the stream manager for managing data streams.
+    ///
+    /// # Arguments
+    ///
+    /// * `api_key` - A string slice holding the Binance API key.
+    /// * `secret_key` - A string slice holding the Binance secret key.
+    /// * `market_sender` - An `ArcSender<MarketMessage>` for sending market-related messages through the system.
+    ///
+    /// # Returns
+    ///
+    /// Returns a new instance of `BinanceApi`.
+
     pub fn new(api_key: &str, secret_key: &str, market_sender: ArcSender<MarketMessage>) -> Self {
         let _ws_host = "wss://stream.binance.com".to_string();
         let _host = "https://api.binance.com".to_string();
@@ -59,6 +77,16 @@ impl BinanceApi {
         }
     }
 
+    /// Parses a Kline response string into a `Kline` struct.
+    ///
+    /// # Arguments
+    ///
+    /// * `res_str` - A string slice representing the JSON response from the Binance API for a Kline query.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Kline>`, which is either a successfully parsed `Kline` or an error in case parsing fails.
+
     pub fn parse_kline(res_str: &str) -> ApiResult<Kline> {
         let lookup: HashMap<String, Value> = serde_json::from_str(res_str).unwrap();
 
@@ -66,12 +94,32 @@ impl BinanceApi {
         Kline::from_binance_lookup(lookup)
     }
 
+    /// Parses a ticker response string into a `Ticker` struct.
+    ///
+    /// # Arguments
+    ///
+    /// * `res_str` - A string slice representing the JSON response from the Binance API for a ticker query.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Ticker>`, which is either a successfully parsed `Ticker` or an error in case parsing fails.
+
     pub fn parse_ticker(res_str: &str) -> ApiResult<Ticker> {
         let lookup: HashMap<String, Value> = serde_json::from_str(res_str).unwrap();
 
         // build kline from hashmap
         Ticker::from_binance_lookup(lookup)
     }
+
+    /// Builds custom HTTP headers for API requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `json` - A boolean indicating whether the "Content-Type" header should be set to "application/json".
+    ///
+    /// # Returns
+    ///
+    /// Returns a `HeaderMap` containing the constructed headers for the request.
 
     fn build_headers(&self, json: bool) -> HeaderMap {
         let mut custom_headers = HeaderMap::new();
@@ -87,6 +135,17 @@ impl BinanceApi {
 
         custom_headers
     }
+
+    /// Performs an HTTP GET request to the specified endpoint.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - A string slice specifying the endpoint for the GET request.
+    /// * `query_str` - An optional string slice containing the query string to be appended to the endpoint.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` with the response `Response` object if the request is successful, or an error of type `reqwest::Error` otherwise.
 
     async fn get(
         &self,
@@ -106,6 +165,17 @@ impl BinanceApi {
             .await
     }
 
+    /// Performs an HTTP POST request to the specified endpoint.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - A string slice specifying the endpoint for the POST request.
+    /// * `query_str` - A string slice containing the body of the POST request.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` with the response `Response` object if the request is successful, or an error of type `reqwest::Error` otherwise.
+
     async fn post(&self, endpoint: &str, query_str: &str) -> Result<Response, reqwest::Error> {
         let url = format!("{}{}", self.host, endpoint);
         let body = query_str.to_string();
@@ -117,6 +187,18 @@ impl BinanceApi {
             .send()
             .await
     }
+
+    /// Processes the HTTP response, extracting the relevant data based on the content type.
+    ///
+    /// This method checks the content type of the response and accordingly parses the response body as either plain text or JSON. It is designed to handle different response formats gracefully, ensuring that the data is correctly extracted from various API endpoints.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - The `Response` object received from an HTTP request.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Value>`, which is a `Result` type that either contains the parsed data as a `serde_json::Value` or an error if the response processing fails.
 
     async fn handle_response(&self, response: Response) -> ApiResult<Value> {
         let data = match &response.headers().get("content-type") {
@@ -132,6 +214,18 @@ impl BinanceApi {
 
         Ok(data)
     }
+
+    /// Signs a query string using the API secret key.
+    ///
+    /// This method is used to generate a signature for secured endpoints. The signature is generated using HMAC SHA256, based on the query string and the secret key.
+    ///
+    /// # Arguments
+    ///
+    /// * `query_str` - A string slice containing the query string to be signed.
+    ///
+    /// # Returns
+    ///
+    /// Returns a string representing the hexadecimal value of the signature.
 
     fn sign_query_str(&self, query_str: &str) -> String {
         // Create a new HMAC instance with SHA256
@@ -151,9 +245,33 @@ impl BinanceApi {
 
 #[async_trait]
 impl ExchangeApi for BinanceApi {
+    /// Initiates an asynchronous request to retrieve the balance of the account.
+    ///
+    /// This method asynchronously queries the exchange to fetch the current balance of the trading account. It encapsulates the necessary API call, handling any authentication and request formatting internally.
+    ///
+    /// # Returns
+    ///
+    /// An `ApiResult<f64>` representing the successful retrieval of the account balance as a floating-point number. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
+
     async fn get_account_balance(&self) -> ApiResult<f64> {
         unimplemented!()
     }
+
+    /// Opens a new trading position on the exchange with specified parameters.
+    ///
+    /// This method places an order to open a new trading position based on the symbol, margin used, leverage, order side (buy/sell), and the specified opening price. It constructs the request, signs it, and sends it to the exchange.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The market symbol for the trading pair.
+    /// * `margin_usd` - The amount of margin in USD to be used for this position.
+    /// * `leverage` - The leverage to apply to the position.
+    /// * `order_side` - The side of the order, either `OrderSide::Buy` or `OrderSide::Sell`.
+    /// * `open_price` - The price at which to attempt to open the position.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Position>` indicating the successful creation of a trading position, or an error if the operation fails.
 
     async fn open_position(
         &self,
@@ -202,10 +320,31 @@ impl ExchangeApi for BinanceApi {
         }
     }
 
+    /// Closes an existing trading position on the exchange.
+    ///
+    /// This method sends a request to the exchange to close a specific trading position at the specified price. It handles the necessary calculations to close the position based on its current state.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The `Position` object representing the trading position to close.
+    /// * `close_price` - The price at which the position should be closed.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<TradeTx>` representing the transaction details of the closed position, or an error if the operation fails.
+
     async fn close_position(&self, position: Position, close_price: f64) -> ApiResult<TradeTx> {
         // TODO: make api request to close position
         Ok(TradeTx::new(close_price, generate_ts(), position))
     }
+
+    /// Retrieves the account information from the exchange.
+    ///
+    /// This asynchronous method sends a request to the exchange to get detailed information about the trading account, including balances for each asset.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Value>`, where `Value` is a JSON representation of the account information. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
 
     async fn get_account(&self) -> ApiResult<Value> {
         let endpoint = "/api/v3/account";
@@ -219,6 +358,19 @@ impl ExchangeApi for BinanceApi {
 
         self.handle_response(res).await
     }
+
+    /// Fetches the latest k-line (candlestick) data for a specified symbol and interval.
+    ///
+    /// This method queries the exchange for the most recent k-line data of the given trading pair and interval. It's useful for strategies that require up-to-date market data to make informed decisions.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The market symbol for the trading pair.
+    /// * `interval` - The interval between k-lines, such as "1m" for one minute.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Kline>`, encapsulating the latest k-line data. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
 
     async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline> {
         let endpoint = format!("/api/v3/klines?symbol={symbol}&interval={interval}&limit=1");
@@ -251,9 +403,29 @@ impl ExchangeApi for BinanceApi {
         })
     }
 
+    /// Retrieves the current ticker information for a specified symbol.
+    ///
+    /// This method queries the exchange for the latest market ticker of the given trading pair. The ticker includes price changes, high, low, and other relevant market data.
+    ///
+    /// # Arguments
+    ///
+    /// * `_symbol` - The market symbol for the trading pair.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Ticker>`, providing the current market ticker data. If the operation fails, it returns an error within `ApiResult`.
+
     async fn get_ticker(&self, _symbol: &str) -> ApiResult<Ticker> {
         Ok(Ticker::default())
     }
+
+    /// Lists all orders associated with the account, including historical orders.
+    ///
+    /// This asynchronous method sends a request to the exchange to retrieve a comprehensive list of all orders placed by the account, allowing for a complete audit trail of trading activity.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<Value>`, where `Value` is a JSON array of orders. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
 
     async fn all_orders(&self) -> ApiResult<Value> {
         let endpoint = "/api/v3/allOrderList";
@@ -267,6 +439,15 @@ impl ExchangeApi for BinanceApi {
 
         self.handle_response(res).await
     }
+
+    /// Retrieves a list of all open (active) orders for the account.
+    ///
+    /// This method queries the exchange for any orders that have been placed but not yet filled or canceled. It's essential for managing and monitoring current market positions.
+    ///
+    /// # Returns
+    ///
+    /// An `ApiResult<Value>` that contains a JSON array of open orders. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
+
     async fn list_open_orders(&self) -> ApiResult<Value> {
         let endpoint = "/api/v3/openOrderList";
         let ts = generate_ts();
@@ -283,6 +464,15 @@ impl ExchangeApi for BinanceApi {
     // ---
     // Exchange Methods
     // ---
+
+    /// Provides general information about the exchange, such as supported symbols and limits.
+    ///
+    /// This method sends an asynchronous request to fetch metadata about the exchange, including the names of supported trading pairs, rate limits, and other relevant data.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<ExchangeInfo>`, encapsulating various pieces of information about the exchange. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
+
     async fn info(&self) -> ApiResult<ExchangeInfo> {
         let endpoint = "/api/v3/exchangeInfo";
 
@@ -327,6 +517,16 @@ impl ExchangeApi for BinanceApi {
     }
 }
 
+/// Represents a manager responsible for handling streams from Binance.
+///
+/// This struct is tasked with managing WebSocket streams for market data such as klines and tickers. It keeps track of active streams, dispatches market messages to a receiver, and manages the lifecycle of each stream.
+///
+/// # Fields
+///
+/// - `streams`: A collection of active WebSocket streams identified by their unique stream IDs.
+/// - `market_sender`: A channel sender used to forward market messages (e.g., new klines or tickers) to a receiver for processing.
+/// - `stream_metas`: A thread-safe container holding metadata about each stream, including its type, symbol, and last update timestamp.
+
 pub struct BinanceStreamManager {
     streams: HashMap<String, ArcEsStreamSync>,
     market_sender: ArcSender<MarketMessage>,
@@ -334,6 +534,18 @@ pub struct BinanceStreamManager {
 }
 
 impl BinanceStreamManager {
+    /// Constructs a new instance of the Binance stream manager.
+    ///
+    /// This constructor initializes the stream manager with an empty collection of active streams and a sender for market messages. It's responsible for managing websocket streams for market data updates.
+    ///
+    /// # Arguments
+    ///
+    /// * `market_sender` - An `ArcSender<MarketMessage>` used to send market updates to a receiver.
+    ///
+    /// # Returns
+    ///
+    /// Returns a new instance of `BinanceStreamManager` with initialized fields.
+
     pub fn new(market_sender: ArcSender<MarketMessage>) -> Self {
         Self {
             streams: HashMap::new(),
@@ -345,6 +557,18 @@ impl BinanceStreamManager {
 
 #[async_trait]
 impl StreamManager for BinanceStreamManager {
+    /// Opens a new stream based on the provided `StreamMeta` information.
+    ///
+    /// This method establishes a new websocket connection to the Binance API for the specified stream. It listens for messages on the websocket and forwards relevant market data to the `market_sender`.
+    ///
+    /// # Arguments
+    ///
+    /// * `stream_meta` - A `StreamMeta` object containing the details of the stream to open, such as the symbol, interval, and stream type.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ApiResult<String>` containing the stream ID if the stream is successfully opened, or an error in case of failure.
+
     async fn open_stream(&mut self, stream_meta: StreamMeta) -> ApiResult<String> {
         let (ws_stream, _) = connect_async(stream_meta.url.to_string())
             .await
@@ -430,6 +654,18 @@ impl StreamManager for BinanceStreamManager {
 
         Ok(stream_meta.id.to_string())
     }
+
+    /// Closes an active stream identified by its stream ID.
+    ///
+    /// This method shuts down the specified websocket connection and removes it from the manager's collection of active streams. It's used to stop receiving updates from a particular market data stream.
+    ///
+    /// # Arguments
+    ///
+    /// * `stream_id` - A string slice representing the ID of the stream to close.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `Option<StreamMeta>` containing the metadata of the closed stream if found and successfully closed, or `None` if the stream ID does not match any active streams.
 
     async fn close_stream(&mut self, stream_id: &str) -> Option<StreamMeta> {
         let mut infos = self.stream_metas.lock().await;

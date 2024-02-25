@@ -12,14 +12,31 @@ use crate::{
 
 use super::trade::{PositionId, TradeTx};
 
+/// Represents a trading account with positions, trades, and an exchange API.
 pub struct Account {
+    /// A hashmap containing positions associated with their IDs.
     positions: HashMap<PositionId, Position>,
+    /// A vector containing trade transactions.
     trades: Vec<TradeTx>,
+    /// A thread-safe reference to the exchange API.
     exchange_api: Arc<Box<dyn ExchangeApi>>,
+    /// A flag indicating whether the account is in dry run mode.
     dry_run: bool,
 }
 
 impl Account {
+    /// Creates a new instance of `Account`.
+    ///
+    /// # Parameters
+    ///
+    /// * `exchange_api` - A thread-safe reference to the exchange API.
+    /// * `init_workers` - A flag indicating whether to initialize worker threads.
+    /// * `dry_run` - A flag indicating whether the account operates in dry run mode.
+    ///
+    /// # Returns
+    ///
+    /// A new instance of `Account`.
+
     pub async fn new(
         exchange_api: Arc<Box<dyn ExchangeApi>>,
         init_workers: bool,
@@ -37,6 +54,22 @@ impl Account {
         }
         _self
     }
+
+    /// Opens a position on the exchange.
+    ///
+    /// # Parameters
+    ///
+    /// * `symbol` - The symbol of the asset.
+    /// * `margin_usd` - The margin allocated for the position in USD.
+    /// * `leverage` - The leverage used for the position.
+    /// * `order_side` - The side of the order (Buy or Sell).
+    /// * `open_price` - The price at which the position is opened.
+    /// * `strategy_id` - Optional strategy ID associated with the position.
+    /// * `stop_loss` - Optional stop-loss price for the position.
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the opened position if successful, otherwise `None`.
 
     pub async fn open_position(
         &mut self,
@@ -65,6 +98,17 @@ impl Account {
         None
     }
 
+    /// Closes a position on the exchange.
+    ///
+    /// # Parameters
+    ///
+    /// * `position_id` - The ID of the position to close.
+    /// * `close_price` - The price at which the position is closed.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the trade transaction if successful, otherwise `None`.
+
     pub async fn close_position(
         &mut self,
         position_id: PositionId,
@@ -91,13 +135,35 @@ impl Account {
         None
     }
 
+    /// Returns an iterator over the account's positions.
+    ///
+    /// # Returns
+    ///
+    /// An iterator yielding references to positions.
+
     pub fn positions(&self) -> Values<'_, PositionId, Position> {
         self.positions.values()
     }
 
+    /// Returns a clone of the list of trade transactions.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing trade transactions.
+
     pub fn trades(&self) -> Vec<TradeTx> {
         self.trades.clone()
     }
+
+    /// Returns positions and trades associated with a specific strategy ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `strategy_id` - The ID of the strategy.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing vectors of positions and trade transactions associated with the strategy.
 
     pub fn strategy_positions_trades(
         &self,
@@ -122,6 +188,16 @@ impl Account {
         (positions, trades)
     }
 
+    /// Returns positions associated with a specific strategy ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `strategy_id` - The ID of the strategy.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing references to positions associated with the strategy.
+
     pub fn strategy_positions(&self, strategy_id: StrategyId) -> Vec<&Position> {
         let mut positions = vec![];
         for pos in self.positions.values() {
@@ -133,6 +209,16 @@ impl Account {
         }
         positions
     }
+
+    /// Returns trade transactions associated with a specific strategy ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `strategy_id` - The ID of the strategy.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing references to trade transactions associated with the strategy.
 
     pub fn strategy_trades(&self, _strategy_id: StrategyId) -> Vec<&TradeTx> {
         let mut trades = vec![];
@@ -146,14 +232,33 @@ impl Account {
         trades
     }
 
+    /// Checks if the account is in dry run mode.
+    ///
+    /// # Returns
+    ///
+    /// A boolean indicating whether the account is in dry run mode.
+
     pub fn is_dry_run(&self) -> bool {
         self.dry_run
     }
+
+    /// Sets the exchange API and dry run mode.
+    ///
+    /// # Parameters
+    ///
+    /// * `api` - A thread-safe reference to the exchange API.
+    /// * `dry_run` - A flag indicating whether to operate in dry run mode.
 
     pub fn set_exchange_api(&mut self, api: Arc<Box<dyn ExchangeApi>>, dry_run: bool) {
         self.dry_run = dry_run;
         self.exchange_api = api;
     }
+
+    /// Retrieves account information.
+    ///
+    /// # Returns
+    ///
+    /// Account information including positions, trades, and exchange API details.
 
     pub async fn info(&self) -> AccountInfo {
         let info = self.exchange_api.info().await.ok();
@@ -165,6 +270,16 @@ impl Account {
         }
     }
 
+    /// Retrieves a position by its ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `position_id` - The ID of the position to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the position if found, otherwise `None`.
+
     pub fn get_position(&self, position_id: &PositionId) -> Option<&Position> {
         self.positions.get(position_id)
     }
@@ -173,6 +288,7 @@ impl Account {
     // Private Methods
     // ---
 
+    /// Initializes worker threads for the account.
     async fn init(&self) {
         // start any worker threads for account
     }
