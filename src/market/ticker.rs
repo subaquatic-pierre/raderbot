@@ -12,6 +12,12 @@ use crate::{
     },
 };
 
+/// Provides metadata for a ticker, including the symbol and the last update timestamp.
+///
+/// # Attributes
+/// - `symbol`: A string representing the trading symbol of the ticker.
+/// - `last_update`: A Unix timestamp (u64) indicating the last time the ticker was updated.
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TickerMeta {
     pub symbol: String,
@@ -19,6 +25,11 @@ pub struct TickerMeta {
 }
 
 impl TickerMeta {
+    /// Constructs a new `TickerMeta` instance with the given symbol and current timestamp.
+    ///
+    /// # Parameters
+    /// - `symbol`: A string slice that holds the symbol for which metadata is being created.
+
     pub fn new(symbol: &str) -> Self {
         Self {
             symbol: symbol.to_string(),
@@ -27,6 +38,12 @@ impl TickerMeta {
     }
 }
 
+/// Represents detailed data for a ticker, including its metadata and current state.
+///
+/// # Attributes
+/// - `meta`: Metadata about the ticker including the symbol and last update time.
+/// - `ticker`: The current state of the ticker including price, volume, and other trading information.
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TickerData {
     pub meta: TickerMeta,
@@ -34,12 +51,24 @@ pub struct TickerData {
 }
 
 impl TickerData {
+    /// Creates a new `TickerData` instance for a given symbol and its ticker information.
+    ///
+    /// # Parameters
+    /// - `symbol`: A string slice that holds the symbol for the ticker.
+    /// - `ticker`: A `Ticker` instance containing the current state of the ticker.
+
     pub fn new(symbol: &str, ticker: Ticker) -> Self {
         Self {
             meta: TickerMeta::new(symbol),
             ticker,
         }
     }
+
+    /// Updates the ticker with new data and updates the last update timestamp.
+    ///
+    /// # Parameters
+    /// - `ticker`: A `Ticker` instance containing the new state of the ticker.
+    /// - `update_time`: The Unix timestamp (u64) at which the ticker is being updated.
 
     pub fn update_ticker(&mut self, ticker: Ticker, update_time: u64) {
         self.ticker = ticker;
@@ -50,6 +79,22 @@ impl TickerData {
         // return true ticker added
     }
 }
+
+/// Represents the current state of a market ticker, including price information and volume.
+///
+/// # Attributes
+/// - `time`: A Unix timestamp (u64) indicating when the ticker data was published.
+/// - `symbol`: The trading symbol associated with the ticker.
+/// - `price_change`: The absolute change in price since the last update.
+/// - `percent_change`: The percentage change in price since the last update.
+/// - `high`: The highest price at which the ticker traded during the period.
+/// - `low`: The lowest price at which the ticker traded during the period.
+/// - `traded_vol`: The total volume traded in the period.
+/// - `quote_vol`: The total quote volume traded in the period.
+/// - `last_price`: The last traded price for the ticker.
+/// - `open_price`: The price at which the ticker opened during the period.
+/// - `open_time`: The start time of the period for which the ticker is reported.
+/// - `close_time`: The end time of the period for which the ticker is reported.
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Ticker {
@@ -69,6 +114,11 @@ pub struct Ticker {
 }
 
 impl Ticker {
+    /// Constructs a `Ticker` instance by extracting relevant information from a Binance API response.
+    ///
+    /// # Parameters
+    /// - `lookup`: A hashmap containing the raw ticker data from the Binance API response.
+
     pub fn from_binance_lookup(lookup: HashMap<String, Value>) -> ApiResult<Self> {
         let symbol = lookup
             .get("s")
@@ -170,6 +220,11 @@ impl Ticker {
         })
     }
 
+    /// Constructs a `Ticker` instance by extracting relevant information from a BingX API response.
+    ///
+    /// # Parameters
+    /// - `data`: A hashmap containing the raw ticker data from the BingX API response.
+
     pub fn from_bingx_lookup(data: HashMap<String, Value>) -> ApiResult<Self> {
         //  {
         //       "symbol": "BTC-USDT",
@@ -251,6 +306,10 @@ impl Ticker {
     }
 }
 
+/// Provides a default instance of a `Ticker` with placeholder values.
+///
+/// This implementation is primarily for testing or when a default value is necessary before real data is available.
+
 impl Default for Ticker {
     fn default() -> Self {
         let price = generate_random_id() as f64 * 0.8;
@@ -271,6 +330,7 @@ impl Default for Ticker {
     }
 }
 
+/// Implements the `MarketDataSymbol` trait for `Ticker`, allowing retrieval of the ticker's symbol as a string.
 impl MarketDataSymbol for Ticker {
     fn symbol(&self) -> String {
         self.symbol.to_string()

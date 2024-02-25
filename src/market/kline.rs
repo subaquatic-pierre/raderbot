@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -11,6 +10,11 @@ use crate::{
         time::{calculate_kline_open_time, generate_ts},
     },
 };
+
+/// Represents metadata for a series of klines, including the symbol, interval, length, and last update timestamp.
+///
+/// This struct is used to track the metadata associated with a collection of kline data for a specific
+/// trading pair and interval.
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KlineMeta {
@@ -30,6 +34,12 @@ impl KlineMeta {
         }
     }
 }
+
+/// Contains kline data and associated metadata for a specific trading pair and interval.
+///
+/// This struct is designed to hold a collection of klines along with their metadata. It provides methods
+/// to add new klines to the collection, clear existing klines, and manipulate the kline data.
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KlineData {
     pub meta: KlineMeta,
@@ -37,12 +47,21 @@ pub struct KlineData {
 }
 
 impl KlineData {
+    /// Creates a new `KlineData` instance for a specific symbol and interval.
+    ///
+    /// This method initializes a `KlineData` object with empty kline data and associated metadata.
+
     pub fn new(symbol: &str, interval: &str) -> Self {
         Self {
             meta: KlineMeta::new(symbol, interval),
             klines: vec![],
         }
     }
+
+    /// Adds a kline to the data set, ensuring chronological order and uniqueness based on open time.
+    ///
+    /// This method adds a new kline to the collection, replacing any existing kline with the same open time.
+    /// Returns `true` if the kline was added or replaced, `false` if it was a duplicate and not added.
 
     pub fn add_kline(&mut self, kline: Kline) -> bool {
         // get last kline
@@ -69,11 +88,19 @@ impl KlineData {
         }
     }
 
+    /// Clears all kline data from the collection, resetting the length to 0.
+    ///
+    /// This method is used to remove all existing klines from the `KlineData`, effectively resetting the data.
+
     pub fn clear_klines(&mut self) {
         self.klines = vec![];
         self.meta.len = 0;
     }
 }
+
+/// Represents a single kline or candlestick data point, including open, high, low, close, and volume information.
+///
+/// This struct is the fundamental data structure for representing a single kline or candlestick in market data.
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Kline {
@@ -105,6 +132,10 @@ impl Default for Kline {
 }
 
 impl Kline {
+    /// Constructs a kline from a lookup hashmap containing kline data from Binance.
+    ///
+    /// This method is responsible for parsing the kline data provided by Binance's API and constructing a `Kline` instance.
+
     pub fn from_binance_lookup(lookup: HashMap<String, Value>) -> ApiResult<Self> {
         let _kline = lookup.get("k").ok_or_else(|| {
             // Create an error message or construct an error type
@@ -181,6 +212,10 @@ impl Kline {
         })
     }
 
+    /// Constructs a kline from a lookup hashmap containing kline data from BingX.
+    ///
+    /// This method is similar to `from_binance_lookup` but tailored for parsing kline data specific to BingX's API.
+
     pub fn from_bingx_lookup(
         data: HashMap<String, Value>,
         symbol: &str,
@@ -229,6 +264,10 @@ impl Kline {
             close_time,
         })
     }
+
+    /// Constructs a kline from a websocket lookup hashmap containing kline data from BingX.
+    ///
+    /// This method is designed to parse kline data received from BingX's websocket feed and construct a `Kline` instance.
 
     pub fn from_bingx_lookup_ws(lookup: HashMap<String, Value>) -> ApiResult<Self> {
         // {
@@ -279,11 +318,19 @@ impl Kline {
     }
 }
 
+/// Provides an interface for a market data symbol, allowing retrieval of the symbol string.
+///
+/// This trait defines a common interface for any data structure that represents market data and includes a trading pair symbol.
+
 impl MarketDataSymbol for Kline {
     fn symbol(&self) -> String {
         self.symbol.to_string()
     }
 }
+
+/// Represents a kline data structure specifically formatted to match Binance's API response.
+///
+/// This struct is tailored to match the kline data format returned by Binance's API, including additional fields like quote volume and trade count.
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BinanceKline {
