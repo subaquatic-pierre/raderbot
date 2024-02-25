@@ -6,6 +6,17 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
+/// Parses a floating-point number from a given lookup HashMap.
+///
+/// # Arguments
+///
+/// * `key` - The key to look up in the HashMap.
+/// * `lookup` - The HashMap containing string keys and JSON `Value`s.
+///
+/// # Returns
+///
+/// Returns an `ApiResult<f64>`, which is Ok containing the parsed number if successful,
+/// or an `ApiError` if the key is missing or the value cannot be parsed as a `f64`.
 pub fn parse_f64_from_lookup(key: &str, lookup: &HashMap<String, Value>) -> ApiResult<f64> {
     let num = lookup
         .get(key)
@@ -26,6 +37,17 @@ pub fn parse_f64_from_lookup(key: &str, lookup: &HashMap<String, Value>) -> ApiR
     }
 }
 
+/// Parses a usize from a JSON `Value` by a given key.
+///
+/// # Arguments
+///
+/// * `key` - The key to look up in the JSON `Value`.
+/// * `value` - The JSON `Value` containing the data.
+///
+/// # Returns
+///
+/// Returns `Ok(usize)` if the value exists and can be parsed as `usize`,
+/// or an error message if the key is missing or the value cannot be parsed.
 pub fn parse_usize_from_value(key: &str, value: &Value) -> Result<usize, &'static str> {
     if let Some(val) = value.get(key) {
         if let Some(num) = val.as_u64() {
@@ -36,11 +58,21 @@ pub fn parse_usize_from_value(key: &str, value: &Value) -> Result<usize, &'stati
     Err("Unable to parse usize from value")
 }
 
+/// Generates a random ID.
+///
+/// # Returns
+///
+/// Returns a `u32` random ID.
 pub fn generate_random_id() -> u32 {
     let mut rng = rand::thread_rng();
     rng.gen()
 }
 
+/// Generates a random number within the range 1000 to 2999, representing milliseconds.
+///
+/// # Returns
+///
+/// Returns a `u64` representing the random milliseconds.
 pub fn _gen_random_milliseconds() -> u64 {
     rand::thread_rng().gen_range(1000..3000)
 }
@@ -50,6 +82,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// Tests parsing a `f64` from a lookup map.
     #[test]
     fn test_parse_f64_from_lookup() {
         let mut lookup = HashMap::new();
@@ -70,6 +103,7 @@ mod tests {
         assert!(parse_f64_from_lookup("key", &lookup).is_err());
     }
 
+    /// Tests parsing a `usize` from a JSON `Value`.
     #[test]
     fn test_parse_usize_from_value() {
         // Test with a valid value containing a usize
@@ -89,6 +123,7 @@ mod tests {
         assert!(parse_usize_from_value("key", &value).is_err());
     }
 
+    /// Tests the generation of random IDs to ensure they are indeed random.
     #[test]
     fn test_generate_random_id() {
         // Test the generate_random_id function
@@ -99,6 +134,7 @@ mod tests {
         assert_ne!(id1, id2, "Random IDs should not be equal");
     }
 
+    /// Tests the generation of random milliseconds within the specified range.
     #[test]
     fn test_gen_random_milliseconds() {
         // Test the gen_random_milliseconds function

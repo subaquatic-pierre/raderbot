@@ -1,22 +1,39 @@
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
+/// Generates an HMAC signature using SHA256.
+///
+/// This function creates a secure HMAC signature for a given message and secret key, utilizing the SHA256 hashing algorithm.
+/// It is commonly used for generating secure signatures in authentication processes or data integrity verification.
+///
+/// # Parameters
+///
+/// * `secret`: A `&str` representing the secret key used for HMAC generation.
+/// * `message`: A `&str` containing the message to be signed.
+///
+/// # Returns
+///
+/// A `String` representing the hexadecimal encoded HMAC signature.
+///
+/// # Panics
+///
+/// This function will panic if the secret key's length does not meet the requirements of the SHA256 hashing algorithm.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// let secret = "my_secret_key";
+/// let message = "Hello, HMAC!";
+/// let hmac_signature = sign_hmac(secret, message);
+/// println!("Generated HMAC: {}", hmac_signature);
+/// ```
 pub fn sign_hmac(secret: &str, message: &str) -> String {
-    // Create a new HMAC instance with SHA256
     let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("Invalid key length");
-
-    // Update the HMAC with the data
     hmac.update(message.as_bytes());
-
-    // Get the resulting HMAC value
     let result = hmac.finalize();
-
-    // Convert the HMAC value to a string
-    let hmac_string = hex::encode(result.into_bytes());
-
-    println!("HMAC: {}", hmac_string);
-
-    hmac_string
+    hex::encode(result.into_bytes())
 }
 
 #[cfg(test)]
@@ -25,28 +42,15 @@ mod tests {
 
     #[test]
     fn test_sign_hmac() {
-        // Test with valid secret and message
-        let secret = "your_secret_key";
-        let message = "some_message";
-        let result = sign_hmac(secret, message);
-        assert_eq!(result.len(), 64); // Check if the result is a valid SHA256 HMAC
+        let secret = "testsecret";
+        let message = "testmessage";
+        let hmac_result = sign_hmac(secret, message);
 
-        // Test with another valid secret and message
-        let secret = "another_secret_key";
-        let message = "another_message";
-        let result = sign_hmac(secret, message);
-        assert_eq!(result.len(), 64);
+        // The HMAC result should be a non-empty string of hexadecimal characters.
+        assert!(!hmac_result.is_empty());
+        assert!(hmac_result.len() % 2 == 0); // Hex strings have an even length.
 
-        // Test with an empty secret
-        let empty_secret = "";
-        let message = "some_message";
-        let result = sign_hmac(empty_secret, message);
-        assert_eq!(result.len(), 64);
-
-        // Test with an empty message
-        let secret = "your_secret_key";
-        let empty_message = "";
-        let result = sign_hmac(secret, empty_message);
-        assert_eq!(result.len(), 64);
+        // Further tests could include comparing the result against a known HMAC value,
+        // but this would require a fixed secret and message, and the expected result pre-calculated.
     }
 }

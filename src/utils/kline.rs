@@ -8,6 +8,21 @@ use crate::{
 };
 use csv::Reader;
 
+/// Loads k-line (candlestick) data for Binance trading pairs from a CSV file.
+///
+/// # Arguments
+///
+/// * `file_path` - The file path to the CSV file containing k-line data.
+/// * `symbol` - The symbol for which k-line data is being loaded, e.g., "BTCUSDT".
+/// * `interval` - The interval for k-line data, e.g., "1m" for one minute.
+///
+/// # Returns
+///
+/// A vector of `Kline` structs representing the k-line data from the file.
+///
+/// # Panics
+///
+/// Panics if the file cannot be opened or if there is an error reading from the file.
 pub fn load_binance_klines(
     file_path: std::path::PathBuf,
     symbol: &str,
@@ -68,12 +83,32 @@ pub fn load_binance_klines(
     klines
 }
 
+/// Parses the filename to extract the symbol and interval for k-line data.
+///
+/// # Arguments
+///
+/// * `filename` - The name of the file containing k-line data.
+///
+/// # Returns
+///
+/// A tuple containing the symbol and interval as `String`.
 pub fn interval_symbol_from_binance_filename(filename: &str) -> (String, String) {
     let parts = filename.split('-');
     let collection: Vec<&str> = parts.collect();
     (collection[0].to_string(), collection[1].to_string())
 }
 
+/// Saves k-line data to a specified CSV file.
+///
+/// # Arguments
+///
+/// * `filename` - The file path where the k-line data should be saved.
+/// * `klines` - A slice of `Kline` structs to be saved to the file.
+/// * `_append` - Whether to append the k-lines to the file if it already exists.
+///
+/// # Panics
+///
+/// Panics if the file cannot be created or if there is an error writing to the file.
 pub fn save_klines(filename: std::path::PathBuf, klines: &[Kline], _append: bool) {
     let str_filename = filename.as_os_str().to_string_lossy();
 
@@ -97,6 +132,17 @@ pub fn save_klines(filename: std::path::PathBuf, klines: &[Kline], _append: bool
     }
 }
 
+/// Generates filenames for saving k-line data based on a key, from and to timestamps.
+///
+/// # Arguments
+///
+/// * `kline_key` - A key representing the k-line data set.
+/// * `from_ts` - The starting UNIX timestamp for the k-line data.
+/// * `to_ts` - The ending UNIX timestamp for the k-line data.
+///
+/// # Returns
+///
+/// A vector of filenames as `String`.
 pub fn generate_kline_filenames_in_range(kline_key: &str, from_ts: u64, to_ts: u64) -> Vec<String> {
     let from_date = timestamp_to_datetime(from_ts);
     let to_date = timestamp_to_datetime(to_ts);

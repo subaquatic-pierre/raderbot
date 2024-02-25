@@ -6,6 +6,11 @@ use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 
+/// Generates a current timestamp in milliseconds since the UNIX epoch.
+///
+/// # Returns
+///
+/// A `u64` representing the current timestamp in milliseconds.
 pub fn generate_ts() -> u64 {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -18,6 +23,15 @@ pub fn generate_ts() -> u64 {
     s_ts.parse::<u64>().unwrap()
 }
 
+/// Converts a UNIX timestamp in milliseconds to a `DateTime<Utc>`.
+///
+/// # Arguments
+///
+/// * `timestamp` - A UNIX timestamp in milliseconds.
+///
+/// # Returns
+///
+/// A `DateTime<Utc>` corresponding to the given timestamp.
 pub fn timestamp_to_datetime(timestamp: u64) -> DateTime<Utc> {
     let mut s_ts = format!("{}", timestamp);
     s_ts.truncate(13);
@@ -31,6 +45,15 @@ pub fn timestamp_to_datetime(timestamp: u64) -> DateTime<Utc> {
     DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc)
 }
 
+/// Converts a date string to a UNIX timestamp in milliseconds.
+///
+/// # Arguments
+///
+/// * `date_str` - The date string to convert.
+///
+/// # Returns
+///
+/// A `Result<u64, &'static str>` which is Ok containing the timestamp in milliseconds if successful, or an Err with an error message.
 pub fn string_to_timestamp(date_str: &str) -> Result<u64, &'static str> {
     if let Ok(date) = parse(date_str) {
         let date = date.timestamp_millis();
@@ -49,6 +72,15 @@ pub fn string_to_timestamp(date_str: &str) -> Result<u64, &'static str> {
     Err("Unable to parse date string")
 }
 
+/// Converts a UNIX timestamp in milliseconds to a date string in ISO 8601 format.
+///
+/// # Arguments
+///
+/// * `ts` - A UNIX timestamp in milliseconds.
+///
+/// # Returns
+///
+/// A `String` representing the date in ISO 8601 format.
 pub fn timestamp_to_string(ts: u64) -> String {
     let datetime = timestamp_to_datetime(ts);
     let timestamp_str = datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string();
@@ -56,6 +88,17 @@ pub fn timestamp_to_string(ts: u64) -> String {
     timestamp_str
 }
 
+/// Converts a year, month, and day to a UNIX timestamp in milliseconds.
+///
+/// # Arguments
+///
+/// * `year` - The year component of the date.
+/// * `month` - The month component of the date.
+/// * `day` - The day component of the date.
+///
+/// # Returns
+///
+/// An `Option<u64>` which is Some containing the timestamp in milliseconds if the date is valid, or None if the date is invalid.
 pub fn year_month_day_to_ts(year: u32, month: u32, day: u32) -> Option<u64> {
     let date = NaiveDate::from_ymd_opt(year as i32, month, day);
 
@@ -77,6 +120,16 @@ pub fn year_month_day_to_ts(year: u32, month: u32, day: u32) -> Option<u64> {
     }
 }
 
+/// Calculates the time difference in milliseconds between two UNIX timestamps.
+///
+/// # Arguments
+///
+/// * `from_ts` - The starting UNIX timestamp in milliseconds.
+/// * `to_ts` - The ending UNIX timestamp in milliseconds.
+///
+/// # Returns
+///
+/// A `u64` representing the time difference in milliseconds.
 pub fn get_time_difference(from_ts: u64, to_ts: u64) -> u64 {
     if from_ts > to_ts {
         0 // Return 0 if from_ts is greater than to_ts
@@ -86,6 +139,16 @@ pub fn get_time_difference(from_ts: u64, to_ts: u64) -> u64 {
     }
 }
 
+/// Calculates the open time of a k-line based on its close time and interval.
+///
+/// # Arguments
+///
+/// * `close_time` - The closing time of the k-line in milliseconds.
+/// * `interval` - The interval of the k-line (e.g., "1m", "5m").
+///
+/// # Returns
+///
+/// A `u64` representing the open time of the k-line in milliseconds.
 pub fn calculate_kline_open_time(close_time: u64, interval: &str) -> u64 {
     // Convert the interval to seconds
     let interval_seconds = match interval {
@@ -103,6 +166,15 @@ pub fn calculate_kline_open_time(close_time: u64, interval: &str) -> u64 {
     (close_time + 1) - (interval_seconds * 1000)
 }
 
+/// Builds a `Duration` representing the interval specified by a string.
+///
+/// # Arguments
+///
+/// * `interval` - The interval as a string (e.g., "1m", "5m").
+///
+/// # Returns
+///
+/// A `Result<Duration, &'static str>` which is Ok containing the `Duration` if the interval is supported, or an Err with an error message.
 pub fn build_interval(interval: &str) -> Result<Duration, &'static str> {
     match interval {
         "1m" => Ok(Duration::from_secs(60)),
