@@ -121,7 +121,6 @@ async fn active_strategy_summary(
     body: web::Json<GetStrategyParams>,
 ) -> impl Responder {
     let mut bot = app_data.bot.lock().await;
-    let account = bot.account.clone();
 
     if let Some(summary) = bot.get_strategy_summary(body.strategy_id).await {
         let json_data = json!({ "strategy_summary": summary });

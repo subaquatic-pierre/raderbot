@@ -19,8 +19,6 @@ use super::{
 /// both the account to manage positions and the market to fetch current prices.
 
 pub struct SignalManager {
-    account: ArcMutex<Account>,
-    market: ArcMutex<Market>,
     active_strategy_settings: HashMap<StrategyId, StrategySettings>,
 }
 
@@ -36,10 +34,8 @@ impl SignalManager {
     ///
     /// Returns an instance of `SignalManager`.
 
-    pub fn new(account: ArcMutex<Account>, market: ArcMutex<Market>) -> Self {
+    pub fn new() -> Self {
         Self {
-            account,
-            market,
             active_strategy_settings: HashMap::new(),
         }
     }
@@ -53,9 +49,14 @@ impl SignalManager {
     /// This method considers the current active positions, the strategy settings, and the nature of the signal
     /// to decide on the appropriate trading action.
 
-    pub async fn handle_signal(&mut self, signal: SignalMessage) {
-        let account = self.account.clone();
-        let market = self.market.clone();
+    pub async fn handle_signal(
+        &self,
+        signal: SignalMessage,
+        market: ArcMutex<Market>,
+        account: ArcMutex<Account>,
+    ) {
+        let account = account.clone();
+        let market = market.clone();
         let active_positions: Vec<Position> = account
             .lock()
             .await
@@ -149,8 +150,9 @@ impl SignalManager {
     ///
     /// This allows the `SignalManager` to enforce strategy-specific trading parameters.
 
-    pub fn add_strategy_settings(&mut self, strategy_id: StrategyId, settings: StrategySettings) {
-        self.active_strategy_settings.insert(strategy_id, settings);
+    pub fn add_strategy_settings(&mut self, strategy_id: &StrategyId, settings: StrategySettings) {
+        self.active_strategy_settings
+            .insert(strategy_id.clone(), settings);
     }
 
     /// Removes the trading settings associated with a strategy from the manager.
@@ -161,7 +163,7 @@ impl SignalManager {
     ///
     /// This is used when a strategy is no longer active or has been removed.
 
-    pub fn remove_strategy_settings(&mut self, strategy_id: StrategyId) {
+    pub fn remove_strategy_settings(&mut self, strategy_id: &StrategyId) {
         self.active_strategy_settings.remove(&strategy_id);
     }
 }

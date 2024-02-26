@@ -24,48 +24,11 @@ use crate::{
 
 use tokio::task::JoinHandle;
 
-pub struct StrategyManager {
-    strategy_handles: HashMap<StrategyId, JoinHandle<()>>,
-    strategies: HashMap<StrategyId, Strategy>,
-}
-
-impl StrategyManager {
-    pub fn insert(&mut self, strategy: Strategy, handle: JoinHandle<()>) {
-        self.strategy_handles.insert(strategy.id, handle);
-        self.strategies.insert(strategy.id, strategy);
-    }
-
-    pub fn remove(&mut self, strategy_id: &StrategyId) {
-        self.strategy_handles.remove(&strategy_id);
-        self.strategies.remove(&strategy_id);
-    }
-
-    pub fn get(&mut self, strategy_id: &StrategyId) -> Option<(&JoinHandle<()>, &mut Strategy)> {
-        if let (Some(handle), Some(strategy)) = (
-            self.strategy_handles.get(strategy_id),
-            self.strategies.get_mut(strategy_id),
-        ) {
-            return Some((handle, strategy));
-        }
-        None
-    }
-
-    pub fn list_ids(&self) -> Vec<StrategyId> {
-        let mut strategies = vec![];
-        for (strategy_id, _strategy) in self.strategies.iter() {
-            strategies.push(*strategy_id)
-        }
-
-        strategies
-    }
-}
-
 pub struct RaderBot {
     pub market: ArcMutex<Market>,
     pub account: ArcMutex<Account>,
-    pub exchange_api: Arc<Box<dyn ExchangeApi>>,
-    signal_manager: ArcMutex<SignalManager>,
     strategy_manager: ArcMutex<StrategyManager>,
+    pub exchange_api: Arc<Box<dyn ExchangeApi>>,
     storage_manager: Arc<Box<dyn StorageManager>>,
     strategy_tx: ArcSender<SignalMessage>,
     strategy_rx: ArcReceiver<SignalMessage>,
@@ -102,10 +65,15 @@ impl RaderBot {
 
         let market = ArcMutex::new(market);
 
+        // Account can use different API from market exchange API
+        // that is to allow for retrieving market data from separate source
+        // and to open and close positions on different API source
         let (account_exchange_api, dry_run) = if dry_run == "True" {
             let api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
             (api, true)
         } else {
+            // possible to create different exchange API if needed
+            // instead of using the same API as Market
             (exchange_api.clone(), false)
         };
 
@@ -115,16 +83,10 @@ impl RaderBot {
 
         let (strategy_tx, strategy_rx) = build_arc_channel::<SignalMessage>();
 
-        let signal_manager = ArcMutex::new(SignalManager::new(account.clone(), market.clone()));
-
-        let strategy_manager = StrategyManager {
-            strategy_handles: HashMap::new(),
-            strategies: HashMap::new(),
-        };
+        let strategy_manager = StrategyManager::new();
 
         let mut _self = Self {
             market,
-            signal_manager,
             account,
             exchange_api: exchange_api.clone(),
             strategy_manager: ArcMutex::new(strategy_manager),
@@ -160,15 +122,8 @@ impl RaderBot {
         )?;
 
         let handle = strategy.start().await;
-        let strategy_id = strategy.id;
 
         let strategy_info = strategy.info().await;
-
-        self.signal_manager
-            .clone()
-            .lock()
-            .await
-            .add_strategy_settings(strategy_id, strategy.settings());
 
         self.strategy_manager
             .clone()
@@ -204,10 +159,6 @@ impl RaderBot {
 
         // Remove all handles and settings from signal_manager
         strategy_manager.lock().await.remove(&strategy_id);
-        self.signal_manager
-            .lock()
-            .await
-            .remove_strategy_settings(strategy_id);
 
         summary
     }
@@ -252,7 +203,7 @@ impl RaderBot {
 
         // TODO: Get initial_balance from params
         let initial_balance = Some(10_000.0);
-        let mut back_test = BackTest::new(strategy, initial_balance).await;
+        let mut back_test = BackTest::new(strategy, self.market.clone(), initial_balance).await;
 
         if let Some(kline_data) = self
             .market
@@ -330,13 +281,117 @@ impl RaderBot {
     // ---
 
     async fn init(&mut self) {
-        let signal_manager = self.signal_manager.clone();
+        let strategy_manager = self.strategy_manager.clone();
         let strategy_rx = self.strategy_rx.clone();
+        let account = self.account.clone();
+        let market = self.market.clone();
 
         tokio::spawn(async move {
             while let Some(signal) = strategy_rx.lock().await.recv().await {
-                signal_manager.lock().await.handle_signal(signal).await;
+                let strategy_manager = strategy_manager.lock().await;
+                let signal_manager = strategy_manager.get_signal_manager();
+                signal_manager
+                    .handle_signal(signal, market.clone(), account.clone())
+                    .await;
             }
         });
+    }
+}
+
+/// Manages multiple trading strategies by storing their handles, settings, and providing methods for insertion, removal, and retrieval.
+pub struct StrategyManager {
+    /// A mapping of strategy IDs to their corresponding join handles for managing strategy execution.
+    strategy_handles: HashMap<StrategyId, JoinHandle<()>>,
+    /// A mapping of strategy IDs to their corresponding strategies.
+    strategies: HashMap<StrategyId, Strategy>,
+    /// Manages signals for strategies.
+    signal_manager: SignalManager,
+}
+
+impl StrategyManager {
+    /// Constructs a new `StrategyManager`.
+    ///
+    /// # Returns
+    ///
+    /// A new instance of `StrategyManager` with an empty set of strategies and signal manager.
+    pub fn new() -> Self {
+        let signal_manager = SignalManager::new();
+
+        Self {
+            signal_manager,
+            strategy_handles: HashMap::new(),
+            strategies: HashMap::new(),
+        }
+    }
+
+    /// Inserts a strategy along with its join handle into the manager.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy` - The strategy to insert.
+    /// * `handle` - The join handle associated with the strategy execution.
+    pub fn insert(&mut self, strategy: Strategy, handle: JoinHandle<()>) {
+        let strategy_id = strategy.id.clone();
+        let settings = strategy.settings();
+
+        self.signal_manager
+            .add_strategy_settings(&strategy_id, settings);
+
+        self.strategy_handles.insert(strategy.id, handle);
+        self.strategies.insert(strategy.id, strategy);
+    }
+
+    /// Removes a strategy and its associated join handle from the manager.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy_id` - The ID of the strategy to remove.
+    pub fn remove(&mut self, strategy_id: &StrategyId) {
+        self.strategy_handles.remove(&strategy_id);
+        self.strategies.remove(&strategy_id);
+
+        self.signal_manager.remove_strategy_settings(strategy_id);
+    }
+
+    /// Retrieves the join handle and mutable reference to a strategy with the specified ID, if present.
+    ///
+    /// # Arguments
+    ///
+    /// * `strategy_id` - The ID of the strategy to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the join handle and mutable reference to the strategy, if found.
+    pub fn get(&mut self, strategy_id: &StrategyId) -> Option<(&JoinHandle<()>, &mut Strategy)> {
+        if let (Some(handle), Some(strategy)) = (
+            self.strategy_handles.get(strategy_id),
+            self.strategies.get_mut(strategy_id),
+        ) {
+            return Some((handle, strategy));
+        }
+        None
+    }
+
+    /// Retrieves a list of strategy IDs currently managed by the manager.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing the IDs of the managed strategies.
+    pub fn list_ids(&self) -> Vec<StrategyId> {
+        let mut strategies = vec![];
+        for (strategy_id, _strategy) in self.strategies.iter() {
+            strategies.push(*strategy_id)
+        }
+
+        strategies
+    }
+
+    /// Retrieves a reference to the signal manager associated with this strategy manager.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the signal manager.
+    pub fn get_signal_manager(&self) -> &SignalManager {
+        &self.signal_manager
     }
 }

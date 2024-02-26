@@ -27,6 +27,7 @@ pub struct BackTest {
     pub signals: Vec<SignalMessage>,
     pub signal_manager: SignalManager,
     account: ArcMutex<Account>,
+    market: ArcMutex<Market>,
     period_start_price: f64,
     period_end_price: f64,
 }
@@ -43,7 +44,11 @@ impl BackTest {
     ///
     /// Returns a new instance of `BackTest`.
 
-    pub async fn new(strategy: Strategy, _initial_balance: Option<f64>) -> Self {
+    pub async fn new(
+        strategy: Strategy,
+        market: ArcMutex<Market>,
+        _initial_balance: Option<f64>,
+    ) -> Self {
         let (_, market_rx) = build_arc_channel::<MarketMessage>();
         let exchange_api: Arc<Box<dyn ExchangeApi>> =
             Arc::new(Box::new(MockExchangeApi::default()));
@@ -64,13 +69,14 @@ impl BackTest {
         // create new storage manager
         let account = ArcMutex::new(Account::new(exchange_api.clone(), false, true).await);
 
-        let mut signal_manager = SignalManager::new(account.clone(), market.clone());
-        signal_manager.add_strategy_settings(strategy.id, strategy.settings());
+        let mut signal_manager = SignalManager::new();
+        signal_manager.add_strategy_settings(&strategy.id, strategy.settings());
 
         Self {
             strategy,
             signals: vec![],
             signal_manager,
+            market,
             account,
             period_end_price: 0.0,
             period_start_price: 0.0,
@@ -134,7 +140,9 @@ impl BackTest {
 
     pub async fn result(&mut self) -> StrategySummary {
         for signal in &self.signals {
-            self.signal_manager.handle_signal(signal.clone()).await
+            self.signal_manager
+                .handle_signal(signal.clone(), self.market.clone(), self.account.clone())
+                .await
         }
 
         let info = self.strategy.info().await;
