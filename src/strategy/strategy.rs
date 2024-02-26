@@ -10,7 +10,7 @@ use crate::{
         trade::{OrderSide, Position, TradeTx},
     },
     market::{
-        kline::Kline,
+        kline::{self, Kline},
         market::Market,
         types::{ArcMutex, ArcSender},
     },
@@ -97,7 +97,7 @@ impl Strategy {
     pub async fn start(&mut self) -> JoinHandle<()> {
         self.running = true;
         self.start_time = Some(timestamp_to_string(generate_ts()));
-        let market = self.market.clone();
+        // let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
 
         let id = self.id.clone();
@@ -105,13 +105,18 @@ impl Strategy {
         let algorithm = self.algorithm.clone();
         let interval_str = self.interval.clone();
         let interval_duration = algorithm.lock().await.interval();
+
+        let market = self.market.clone();
         let kline_manager = self.kline_manager.clone();
 
         tokio::spawn(async move {
             loop {
-                let market = market.clone();
+                time::sleep(interval_duration).await;
 
-                if let Some(kline) = market.lock().await.kline_data(&symbol, &interval_str).await {
+                let market = market.clone();
+                let market = market.lock().await;
+
+                if let Some(kline) = market.kline_data(&symbol, &interval_str).await {
                     // check kline is fresh otherwise continue to next interval
                     let last_kline = kline_manager.lock().await.get_kline(FirstLastEnum::Last);
 
@@ -162,9 +167,9 @@ impl Strategy {
                     if let Err(e) = strategy_tx.send(signal) {
                         log::warn!("Unable to send signal back to RaderBot, {e}")
                     }
+                } else {
+                    continue;
                 };
-
-                time::sleep(interval_duration).await;
             }
         })
     }
@@ -185,6 +190,7 @@ impl Strategy {
         account: ArcMutex<Account>,
         close_positions: bool,
     ) -> StrategySummary {
+        let account = account.clone();
         // Get all positions associated with the strategy
         let positions: Vec<Position> = account
             .lock()
@@ -197,8 +203,13 @@ impl Strategy {
         // Close all positions on account attached to this strategy
         if close_positions {
             for position in positions {
-                if let Some(close_price) =
-                    self.market.lock().await.last_price(&position.symbol).await
+                if let Some(close_price) = self
+                    .market
+                    .clone()
+                    .lock()
+                    .await
+                    .last_price(&position.symbol)
+                    .await
                 {
                     account
                         .lock()

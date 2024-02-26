@@ -7,12 +7,14 @@ use actix_web::{
 };
 use actix_web::{post, HttpRequest};
 
+use log::info;
 use serde::Deserialize;
 use serde_json::json;
 
 use crate::{
     account::trade::{OrderSide, Position, PositionId},
     exchange::mock::MockExchangeApi,
+    strategy::strategy::StrategyId,
 };
 use crate::{app::AppState, exchange::api::ExchangeApi};
 
@@ -89,36 +91,43 @@ pub struct OpenPosParams {
     leverage: u32,
     order_side: OrderSide,
     stop_loss: Option<f64>,
+    strategy_id: Option<StrategyId>,
 }
 #[post("/open-position")]
 async fn open_position(app_data: web::Data<AppState>, body: Json<OpenPosParams>) -> impl Responder {
     let account = app_data.get_account().await;
     let market = app_data.get_market().await;
-    let market = market.lock().await;
+
+    let market = market.try_lock();
     let mut account = account.lock().await;
 
-    if let Some(last_price) = market.last_price(&body.symbol).await {
-        let res = account
-            .open_position(
-                &body.symbol,
-                body.margin,
-                body.leverage,
-                body.order_side.clone(),
-                last_price,
-                None,
-                body.stop_loss,
-            )
-            .await;
+    if let Some(market) = market {
+        if let Some(last_price) = market.last_price(&body.symbol).await {
+            let res = account
+                .open_position(
+                    &body.symbol,
+                    body.margin,
+                    body.leverage,
+                    body.order_side.clone(),
+                    last_price,
+                    body.strategy_id,
+                    body.stop_loss,
+                )
+                .await;
 
-        if let Some(res) = res {
-            let json_data = json!({ "success": "Position Opened", "position": res });
-            HttpResponse::Ok().json(json_data)
+            if let Some(res) = res {
+                let json_data = json!({ "success": "Position Opened", "position": res });
+                HttpResponse::Ok().json(json_data)
+            } else {
+                let json_data = json!({ "error": "Unable to open position" });
+                HttpResponse::ExpectationFailed().json(json_data)
+            }
         } else {
             let json_data = json!({ "error": "Unable to open position" });
             HttpResponse::ExpectationFailed().json(json_data)
         }
     } else {
-        let json_data = json!({ "error": "Unable to open position" });
+        let json_data = json!({ "error": "Unable to get market lock" });
         HttpResponse::ExpectationFailed().json(json_data)
     }
 }

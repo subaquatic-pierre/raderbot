@@ -83,6 +83,7 @@ impl Account {
     ) -> Option<&mut Position> {
         if let Ok(mut position) = self
             .exchange_api
+            .clone()
             .open_position(symbol, margin_usd, leverage, order_side, open_price)
             .await
         {

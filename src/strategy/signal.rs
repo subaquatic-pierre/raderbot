@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker};
 
 use log::info;
 
@@ -54,8 +54,9 @@ impl SignalManager {
     /// to decide on the appropriate trading action.
 
     pub async fn handle_signal(&mut self, signal: SignalMessage) {
-        let active_positions: Vec<Position> = self
-            .account
+        let account = self.account.clone();
+        let market = self.market.clone();
+        let active_positions: Vec<Position> = account
             .lock()
             .await
             .strategy_positions(signal.strategy_id)
@@ -68,7 +69,7 @@ impl SignalManager {
         let trigger_price = if signal.is_back_test {
             Some(signal.price)
         } else {
-            self.market.lock().await.last_price(&signal.symbol).await
+            market.lock().await.last_price(&signal.symbol).await
         };
 
         if self
@@ -91,7 +92,7 @@ impl SignalManager {
             if signal.order_side != last.order_side {
                 if let Some(close_price) = trigger_price {
                     for position in &active_positions {
-                        self.account
+                        account
                             .lock()
                             .await
                             .close_position(position.id, close_price)
@@ -103,7 +104,7 @@ impl SignalManager {
             // open position
             } else if active_positions.len() < settings.max_open_orders as usize {
                 if let Some(close_price) = trigger_price {
-                    self.account
+                    account
                         .lock()
                         .await
                         .open_position(
@@ -122,7 +123,7 @@ impl SignalManager {
         // no open positions yet for given strategy
         } else {
             if let Some(last_price) = trigger_price {
-                self.account
+                account
                     .lock()
                     .await
                     .open_position(

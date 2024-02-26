@@ -81,9 +81,18 @@ async fn stop_strategy(
         .stop_strategy(body.strategy_id, close_positions)
         .await;
 
-    let json_data = json!({ "success": "Strategy stopped","strategy_summary":summary });
+    match summary {
+        Some(summary) => {
+            let json_data = json!({ "success": "Strategy stopped","strategy_summary":summary });
 
-    HttpResponse::Ok().json(json_data)
+            HttpResponse::Ok().json(json_data)
+        }
+        None => {
+            let json_data = json!({ "error": "Strategy not found","strategy_id":body.strategy_id });
+
+            HttpResponse::BadRequest().json(json_data)
+        }
+    }
 }
 
 #[post("/list-positions")]
@@ -114,8 +123,7 @@ async fn active_strategy_summary(
     let mut bot = app_data.bot.lock().await;
     let account = bot.account.clone();
 
-    if let Some(strategy) = bot.get_strategy(body.strategy_id) {
-        let summary = strategy.summary(account).await;
+    if let Some(summary) = bot.get_strategy_summary(body.strategy_id).await {
         let json_data = json!({ "strategy_summary": summary });
 
         return HttpResponse::Ok().json(json_data);
@@ -132,8 +140,7 @@ async fn strategy_info(
     body: web::Json<GetStrategyParams>,
 ) -> impl Responder {
     let mut bot = app_data.bot.lock().await;
-    if let Some(strategy) = bot.get_strategy(body.strategy_id) {
-        let info = strategy.info().await;
+    if let Some(info) = bot.get_strategy_info(body.strategy_id).await {
         let json_data = json!({ "strategy_info": info });
 
         return HttpResponse::Ok().json(json_data);
@@ -148,13 +155,13 @@ async fn strategy_info(
 async fn list_active_strategies(app_data: web::Data<AppState>) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let strategy_ids = bot.lock().await.get_active_strategy_ids();
+    let strategy_ids = bot.lock().await.get_active_strategy_ids().await;
 
     let mut infos = vec![];
 
     for id in strategy_ids {
-        if let Some(strategy) = bot.lock().await.get_strategy(id) {
-            infos.push(strategy.info().await.clone())
+        if let Some(info) = bot.lock().await.get_strategy_info(id).await {
+            infos.push(info)
         }
     }
 
@@ -207,7 +214,7 @@ async fn stop_all_strategies(
 ) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let strategies = bot.lock().await.get_active_strategy_ids();
+    let strategies = bot.lock().await.get_active_strategy_ids().await;
 
     let close_positions = body.close_positions.unwrap_or(true);
 
@@ -230,17 +237,18 @@ async fn set_strategy_params(
     app_data: web::Data<AppState>,
     body: Json<SetStrategyParams>,
 ) -> impl Responder {
-    if let Some(strategy) = app_data.bot.lock().await.get_strategy(body.strategy_id) {
-        if let Err(err) = strategy.set_algorithm_params(body.params.clone()).await {
-            let json_data = json!({ "error": err.to_string() });
-            HttpResponse::Ok().json(json_data)
-        } else {
-            let updated_params = strategy.get_algorithm_params().await;
-            let json_data = json!({ "success": { "updated_params": updated_params } });
-            HttpResponse::Ok().json(json_data)
-        }
+    let bot = app_data.bot.clone();
+    let mut bot = bot.lock().await;
+    // if let Some(strategy) = app_data.bot.lock().await.get_strategy(body.strategy_id) {
+    if let Err(err) = bot
+        .set_strategy_params(body.strategy_id, body.params.clone())
+        .await
+    {
+        let json_data = json!({ "error": err.to_string() });
+        HttpResponse::Ok().json(json_data)
     } else {
-        let json_data = json!({ "error": "Unable to find strategy" });
+        let updated_params = bot.get_strategy_params(body.strategy_id).await;
+        let json_data = json!({ "success": { "updated_params": updated_params } });
         HttpResponse::Ok().json(json_data)
     }
 }
@@ -255,9 +263,13 @@ async fn change_strategy_settings(
     app_data: web::Data<AppState>,
     body: Json<ChangeSettingsParams>,
 ) -> impl Responder {
-    if let Some(strategy) = app_data.bot.lock().await.get_strategy(body.strategy_id) {
-        strategy.change_settings(body.settings.clone());
-        let json_data = json!({ "success": { "updated_settings": body.settings } });
+    let bot = app_data.bot.clone();
+    let mut bot = bot.lock().await;
+    if let Some(info) = bot
+        .change_strategy_settings(body.strategy_id, body.settings.clone())
+        .await
+    {
+        let json_data = json!({ "success": { "updated_info": info } });
 
         HttpResponse::Ok().json(json_data)
     } else {

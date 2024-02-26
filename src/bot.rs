@@ -24,19 +24,51 @@ use crate::{
 
 use tokio::task::JoinHandle;
 
+pub struct StrategyManager {
+    strategy_handles: HashMap<StrategyId, JoinHandle<()>>,
+    strategies: HashMap<StrategyId, Strategy>,
+}
+
+impl StrategyManager {
+    pub fn insert(&mut self, strategy: Strategy, handle: JoinHandle<()>) {
+        self.strategy_handles.insert(strategy.id, handle);
+        self.strategies.insert(strategy.id, strategy);
+    }
+
+    pub fn remove(&mut self, strategy_id: &StrategyId) {
+        self.strategy_handles.remove(&strategy_id);
+        self.strategies.remove(&strategy_id);
+    }
+
+    pub fn get(&mut self, strategy_id: &StrategyId) -> Option<(&JoinHandle<()>, &mut Strategy)> {
+        if let (Some(handle), Some(strategy)) = (
+            self.strategy_handles.get(strategy_id),
+            self.strategies.get_mut(strategy_id),
+        ) {
+            return Some((handle, strategy));
+        }
+        None
+    }
+
+    pub fn list_ids(&self) -> Vec<StrategyId> {
+        let mut strategies = vec![];
+        for (strategy_id, _strategy) in self.strategies.iter() {
+            strategies.push(*strategy_id)
+        }
+
+        strategies
+    }
+}
+
 pub struct RaderBot {
     pub market: ArcMutex<Market>,
     pub account: ArcMutex<Account>,
     pub exchange_api: Arc<Box<dyn ExchangeApi>>,
     signal_manager: ArcMutex<SignalManager>,
-    strategy_handles: HashMap<StrategyId, JoinHandle<()>>,
-    strategies: HashMap<StrategyId, Strategy>,
-    strategy_rx: ArcReceiver<SignalMessage>,
-    // TODO: Add to Arc<Box<dyn StorageManager>>
-    // to have access to storage across bot, ie.
-    // may need data base connection
+    strategy_manager: ArcMutex<StrategyManager>,
     storage_manager: Arc<Box<dyn StorageManager>>,
     strategy_tx: ArcSender<SignalMessage>,
+    strategy_rx: ArcReceiver<SignalMessage>,
 }
 
 impl RaderBot {
@@ -85,15 +117,19 @@ impl RaderBot {
 
         let signal_manager = ArcMutex::new(SignalManager::new(account.clone(), market.clone()));
 
+        let strategy_manager = StrategyManager {
+            strategy_handles: HashMap::new(),
+            strategies: HashMap::new(),
+        };
+
         let mut _self = Self {
             market,
             signal_manager,
             account,
             exchange_api: exchange_api.clone(),
-            strategy_handles: HashMap::new(),
-            strategies: HashMap::new(),
-            strategy_rx,
+            strategy_manager: ArcMutex::new(strategy_manager),
             strategy_tx,
+            strategy_rx,
             storage_manager,
         };
 
@@ -118,7 +154,7 @@ impl RaderBot {
             symbol,
             interval,
             strategy_tx,
-            market,
+            market.clone(),
             settings,
             algorithm_params,
         )?;
@@ -129,12 +165,16 @@ impl RaderBot {
         let strategy_info = strategy.info().await;
 
         self.signal_manager
+            .clone()
             .lock()
             .await
             .add_strategy_settings(strategy_id, strategy.settings());
 
-        self.strategy_handles.insert(strategy.id, handle);
-        self.strategies.insert(strategy.id, strategy);
+        self.strategy_manager
+            .clone()
+            .lock()
+            .await
+            .insert(strategy, handle);
 
         Ok(strategy_info)
     }
@@ -146,46 +186,36 @@ impl RaderBot {
     ) -> Option<StrategySummary> {
         let mut summary: Option<StrategySummary> = None;
         let account = self.account.clone();
+        let strategy_manager = self.strategy_manager.clone();
 
         // Remove strategy handles
-        if let Some(handle) = self.strategy_handles.get(&strategy_id) {
+        if let Some((handle, strategy)) = strategy_manager.lock().await.get(&strategy_id) {
             handle.abort();
 
-            // Call stop on strategy to update strategy internal state
-            if let Some(strategy) = self.get_strategy(strategy_id) {
-                let _summary = strategy.stop(account, close_positions).await;
+            let _summary = strategy.stop(account.clone(), close_positions).await;
 
-                // Save summary
-                self.storage_manager
-                    .save_strategy_summary(_summary.clone())
-                    .ok();
+            // Save summary
+            self.storage_manager
+                .save_strategy_summary(_summary.clone())
+                .ok();
 
-                summary = Some(_summary);
-            }
-
-            // Remove all handles and settings from signal_manager
-            self.strategy_handles.remove(&strategy_id);
-            self.strategies.remove(&strategy_id);
-            self.signal_manager
-                .lock()
-                .await
-                .remove_strategy_settings(strategy_id);
+            summary = Some(_summary);
         };
+
+        // Remove all handles and settings from signal_manager
+        strategy_manager.lock().await.remove(&strategy_id);
+        self.signal_manager
+            .lock()
+            .await
+            .remove_strategy_settings(strategy_id);
 
         summary
     }
 
-    pub fn get_active_strategy_ids(&mut self) -> Vec<StrategyId> {
-        let mut strategies = vec![];
-        for (strategy_id, _strategy) in self.strategies.iter() {
-            strategies.push(*strategy_id)
-        }
-
-        strategies
-    }
-
-    pub fn get_strategy(&mut self, strategy_id: StrategyId) -> Option<&mut Strategy> {
-        self.strategies.get_mut(&strategy_id)
+    pub async fn get_active_strategy_ids(&mut self) -> Vec<StrategyId> {
+        let strategy_manager = self.strategy_manager.clone();
+        let strategy_manger = strategy_manager.lock().await;
+        strategy_manger.list_ids()
     }
 
     pub fn list_historical_strategies(&mut self) -> Option<Vec<StrategyInfo>> {
@@ -236,6 +266,63 @@ impl RaderBot {
         };
 
         Ok(back_test.result().await)
+    }
+
+    pub async fn get_strategy_info(&mut self, strategy_id: StrategyId) -> Option<StrategyInfo> {
+        let manager = self.strategy_manager.clone();
+        let mut manager = manager.lock().await;
+        if let Some((_handle, strategy)) = manager.get(&strategy_id) {
+            return Some(strategy.info().await.clone());
+        }
+        None
+    }
+
+    pub async fn get_strategy_summary(
+        &mut self,
+        strategy_id: StrategyId,
+    ) -> Option<StrategySummary> {
+        let manager = self.strategy_manager.clone();
+        let account = self.account.clone();
+        let mut manager = manager.lock().await;
+        if let Some((_handle, strategy)) = manager.get(&strategy_id) {
+            return Some(strategy.summary(account).await.clone());
+        }
+        None
+    }
+
+    pub async fn change_strategy_settings(
+        &mut self,
+        strategy_id: StrategyId,
+        settings: StrategySettings,
+    ) -> Option<StrategyInfo> {
+        let manager = self.strategy_manager.clone();
+        let mut manager = manager.lock().await;
+        if let Some((_handle, strategy)) = manager.get(&strategy_id) {
+            strategy.change_settings(settings);
+            return Some(strategy.info().await);
+        }
+        None
+    }
+
+    pub async fn set_strategy_params(
+        &mut self,
+        strategy_id: StrategyId,
+        params: Value,
+    ) -> Result<(), AlgorithmError> {
+        let manager = self.strategy_manager.clone();
+        let mut manager = manager.lock().await;
+        if let Some((_handle, strategy)) = manager.get(&strategy_id) {
+            strategy.set_algorithm_params(params).await?
+        }
+        Ok(())
+    }
+    pub async fn get_strategy_params(&mut self, strategy_id: StrategyId) -> Option<Value> {
+        let manager = self.strategy_manager.clone();
+        let mut manager = manager.lock().await;
+        if let Some((_handle, strategy)) = manager.get(&strategy_id) {
+            return Some(strategy.get_algorithm_params().await);
+        }
+        None
     }
 
     // ---
