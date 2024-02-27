@@ -6,7 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     account::account::Account,
-    exchange::{api::ExchangeApi, bingx::BingXApi, mock::MockExchangeApi},
+    exchange::{api::ExchangeApi, binance::BinanceApi, bingx::BingXApi, mock::MockExchangeApi},
     market::{
         market::Market,
         messages::MarketMessage,
@@ -44,11 +44,17 @@ impl RaderBot {
         // create new channel for stream handler and market to communicate
         let (market_tx, market_rx) = build_arc_channel::<MarketMessage>();
 
-        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(BingXApi::new(
+        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(BinanceApi::new(
             api_key,
             secret_key,
             market_tx.clone(),
+            false,
         )));
+        // let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(BingXApi::new(
+        //     api_key,
+        //     secret_key,
+        //     market_tx.clone(),
+        // )));
 
         // create new storage manager
         let storage_manager: Arc<Box<dyn StorageManager>> =

@@ -1,10 +1,10 @@
+use actix_web::post;
 use actix_web::web::Json;
 use actix_web::{
     get,
     web::{self, scope},
     HttpResponse, Responder, Scope,
 };
-use actix_web::{post};
 
 use serde::Deserialize;
 use serde_json::json;
@@ -38,6 +38,26 @@ async fn get_kline_data(
         HttpResponse::Ok().json(json_data)
     } else {
         let json_data = json!({ "error": "Kline data not found" });
+        // Stream ID not found
+        HttpResponse::Ok().json(json_data)
+    }
+}
+
+#[post("/ticker-data")]
+async fn get_ticker_data(
+    app_data: web::Data<AppState>,
+    body: Json<GetTickerDataParams>,
+) -> impl Responder {
+    let market = app_data.get_market().await;
+
+    let ticker_data = market.lock().await.ticker_data(&body.symbol).await;
+
+    if let Some(ticker_data) = ticker_data {
+        // Return the stream data as JSON
+        let json_data = json!({ "ticker_data": ticker_data });
+        HttpResponse::Ok().json(json_data)
+    } else {
+        let json_data = json!({ "error": "Ticker data not found" });
         // Stream ID not found
         HttpResponse::Ok().json(json_data)
     }
@@ -118,26 +138,6 @@ async fn last_price(
         HttpResponse::Ok().json(json_data)
     } else {
         let json_data = json!({ "error": "Last price not found","symbol":body.symbol });
-        // Stream ID not found
-        HttpResponse::Ok().json(json_data)
-    }
-}
-
-#[post("/ticker-data")]
-async fn get_ticker_data(
-    app_data: web::Data<AppState>,
-    body: Json<GetTickerDataParams>,
-) -> impl Responder {
-    let market = app_data.get_market().await;
-
-    let ticker_data = market.lock().await.ticker_data(&body.symbol).await;
-
-    if let Some(ticker_data) = ticker_data {
-        // Return the stream data as JSON
-        let json_data = json!({ "ticker_data": ticker_data });
-        HttpResponse::Ok().json(json_data)
-    } else {
-        let json_data = json!({ "error": "Ticker data not found" });
         // Stream ID not found
         HttpResponse::Ok().json(json_data)
     }

@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 
 use futures_util::SinkExt;
+use log::info;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::{Client, Response};
 // use reqwest::Client;
@@ -21,6 +22,7 @@ use crate::exchange::types::ArcEsStreamSync;
 use crate::market::messages::MarketMessage;
 use crate::market::types::{ArcMutex, ArcSender};
 use crate::market::{kline::Kline, ticker::Ticker};
+use crate::utils::number::{parse_f64_from_lookup, parse_f64_from_value, parse_usize_from_value};
 use crate::utils::time::generate_ts;
 
 use super::api::ExchangeInfo;
@@ -56,13 +58,23 @@ impl BinanceApi {
     ///
     /// Returns a new instance of `BinanceApi`.
 
-    pub fn new(api_key: &str, secret_key: &str, market_sender: ArcSender<MarketMessage>) -> Self {
-        let _ws_host = "wss://stream.binance.com".to_string();
-        let _host = "https://api.binance.com".to_string();
+    pub fn new(
+        api_key: &str,
+        secret_key: &str,
+        market_sender: ArcSender<MarketMessage>,
+        test_net: bool,
+    ) -> Self {
+        let (ws_host, host) = if test_net {
+            let host = "https://testnet.binancefuture.com".to_string();
+            let ws_host = "wss://fstream.binancefuture.com".to_string();
+            (ws_host, host)
+        } else {
+            let ws_host = "wss://fstream.binance.com".to_string();
+            let host = "https://fapi.binance.com".to_string();
+            (ws_host, host)
+        };
 
         // Testnet hosts
-        let host = "https://testnet.binance.vision".to_string();
-        let ws_host = "wss://testnet.binance.vision".to_string();
 
         let stream_manager: ArcMutex<Box<dyn StreamManager>> =
             ArcMutex::new(Box::new(BinanceStreamManager::new(market_sender)));
@@ -75,40 +87,6 @@ impl BinanceApi {
             secret_key: secret_key.to_string(),
             stream_manager,
         }
-    }
-
-    /// Parses a Kline response string into a `Kline` struct.
-    ///
-    /// # Arguments
-    ///
-    /// * `res_str` - A string slice representing the JSON response from the Binance API for a Kline query.
-    ///
-    /// # Returns
-    ///
-    /// Returns an `ApiResult<Kline>`, which is either a successfully parsed `Kline` or an error in case parsing fails.
-
-    pub fn parse_kline(res_str: &str) -> ApiResult<Kline> {
-        let lookup: HashMap<String, Value> = serde_json::from_str(res_str).unwrap();
-
-        // build kline from hashmap
-        Kline::from_binance_lookup(lookup)
-    }
-
-    /// Parses a ticker response string into a `Ticker` struct.
-    ///
-    /// # Arguments
-    ///
-    /// * `res_str` - A string slice representing the JSON response from the Binance API for a ticker query.
-    ///
-    /// # Returns
-    ///
-    /// Returns an `ApiResult<Ticker>`, which is either a successfully parsed `Ticker` or an error in case parsing fails.
-
-    pub fn parse_ticker(res_str: &str) -> ApiResult<Ticker> {
-        let lookup: HashMap<String, Value> = serde_json::from_str(res_str).unwrap();
-
-        // build kline from hashmap
-        Ticker::from_binance_lookup(lookup)
     }
 
     /// Builds custom HTTP headers for API requests.
@@ -240,6 +218,18 @@ impl BinanceApi {
 
         // Convert the HMAC value to a string
         hex::encode(result.into_bytes())
+    }
+
+    fn format_binance_symbol(symbol: &str, lower_case: bool) -> String {
+        let split = symbol.split("-");
+        let strings: Vec<&str> = split.collect();
+        let string = strings.join("");
+
+        if lower_case {
+            return string.to_lowercase();
+        }
+
+        string
     }
 }
 
@@ -373,13 +363,31 @@ impl ExchangeApi for BinanceApi {
     /// Returns an `ApiResult<Kline>`, encapsulating the latest k-line data. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
 
     async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline> {
-        let endpoint = format!("/api/v3/klines?symbol={symbol}&interval={interval}&limit=1");
+        let format_symbol = BinanceApi::format_binance_symbol(symbol, false);
+        let endpoint =
+            format!("/fapi/v1/klines?symbol={format_symbol}&interval={interval}&limit=1");
 
         let res = self.get(&endpoint, None).await?;
 
         let data = self.handle_response(res).await?;
 
-        // println!("{res:?}");
+        // Response
+        // [
+        //     [
+        //         1499040000000,      // Open time
+        //         "0.01634790",       // Open
+        //         "0.80000000",       // High
+        //         "0.01575800",       // Low
+        //         "0.01577100",       // Close
+        //         "148976.11427815",  // Volume
+        //         1499644799999,      // Close time
+        //         "2434.19055334",    // Quote asset volume
+        //         308,                // Number of trades
+        //         "1756.87402397",    // Taker buy base asset volume
+        //         "28.46694368",      // Taker buy quote asset volume
+        //         "17928899.62484339" // Ignore.
+        //     ]
+        // ]
 
         let arr: Vec<Vec<Value>> = serde_json::from_value(data).unwrap();
         let open_time = arr[0][0].as_u64().unwrap();
@@ -415,8 +423,44 @@ impl ExchangeApi for BinanceApi {
     ///
     /// Returns an `ApiResult<Ticker>`, providing the current market ticker data. If the operation fails, it returns an error within `ApiResult`.
 
-    async fn get_ticker(&self, _symbol: &str) -> ApiResult<Ticker> {
-        Ok(Ticker::default())
+    async fn get_ticker(&self, symbol: &str) -> ApiResult<Ticker> {
+        let format_symbol = BinanceApi::format_binance_symbol(symbol, false);
+        let endpoint = format!("/fapi/v1/ticker/24hr?symbol={format_symbol}");
+
+        let res = self.get(&endpoint, None).await?;
+
+        let data = self.handle_response(res).await?;
+
+        // TODO: Handle error from Json values gracefully
+
+        let price_change = parse_f64_from_value("priceChange", &data)?;
+        let percent_change = parse_f64_from_value("priceChangePercent", &data)?;
+        let high = parse_f64_from_value("highPrice", &data)?;
+        let low = parse_f64_from_value("lowPrice", &data)?;
+        let traded_vol = parse_f64_from_value("volume", &data)?;
+        let quote_vol = parse_f64_from_value("quoteVolume", &data)?;
+        let last_price = parse_f64_from_value("lastPrice", &data)?;
+        let open_price = parse_f64_from_value("openPrice", &data)?;
+        let open_time = parse_usize_from_value("openTime", &data).unwrap() as u64;
+        let close_time = parse_usize_from_value("closeTime", &data).unwrap() as u64;
+
+        let ticker = Ticker {
+            time: generate_ts(),
+            symbol: symbol.to_string(),
+            price_change,
+            percent_change,
+            high,
+            low,
+            traded_vol,
+            quote_vol,
+            last_price,
+            open_price,
+            open_time,
+            close_time,
+        };
+
+        Ok(ticker)
+        // Ok(Ticker::default())
     }
 
     /// Lists all orders associated with the account, including historical orders.
@@ -504,12 +548,16 @@ impl ExchangeApi for BinanceApi {
                 format!(
                     "{}/ws/{}@kline_{}",
                     self.ws_host,
-                    symbol.to_lowercase(),
+                    BinanceApi::format_binance_symbol(symbol, true),
                     interval.unwrap()
                 )
             }
             StreamType::Ticker => {
-                format!("{}/ws/{}@ticker", self.ws_host, symbol.to_lowercase(),)
+                format!(
+                    "{}/ws/{}@ticker",
+                    self.ws_host,
+                    BinanceApi::format_binance_symbol(symbol, true)
+                )
             }
         };
 
@@ -611,7 +659,12 @@ impl StreamManager for BinanceStreamManager {
                                 stream_meta.last_update = generate_ts();
                                 match stream_meta.stream_type {
                                     StreamType::Kline => {
-                                        let kline = BinanceApi::parse_kline(&text);
+                                        let lookup: HashMap<String, Value> =
+                                            serde_json::from_str(&text).unwrap();
+
+                                        // build kline from hashmap
+
+                                        let kline = Kline::from_binance_lookup(lookup);
 
                                         if let Ok(kline) = kline {
                                             let _ = market_sender
@@ -619,7 +672,11 @@ impl StreamManager for BinanceStreamManager {
                                         }
                                     }
                                     StreamType::Ticker => {
-                                        let ticker = BinanceApi::parse_ticker(&text);
+                                        let lookup: HashMap<String, Value> =
+                                            serde_json::from_str(&text).unwrap();
+
+                                        // build kline from hashmap
+                                        let ticker = Ticker::from_binance_lookup(lookup);
 
                                         if let Ok(ticker) = ticker {
                                             let _ = market_sender
@@ -685,5 +742,20 @@ impl StreamManager for BinanceStreamManager {
     // ---
     fn stream_metas(&self) -> ArcMutex<HashMap<String, StreamMeta>> {
         self.stream_metas.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::test;
+
+    #[test]
+    async fn test_format_binance_symbol() {
+        let symbol = "BTC-USDT";
+        let formatted_symbol = BinanceApi::format_binance_symbol(symbol, true);
+        assert_eq!(formatted_symbol, "btcusdt");
+        let formatted_symbol = BinanceApi::format_binance_symbol(symbol, false);
+        assert_eq!(formatted_symbol, "BTCUSDT");
     }
 }

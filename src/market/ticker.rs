@@ -99,7 +99,6 @@ impl TickerData {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Ticker {
     pub time: u64,
-
     pub symbol: String,
     pub price_change: f64,
     pub percent_change: f64,

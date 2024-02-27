@@ -58,6 +58,24 @@ pub fn parse_usize_from_value(key: &str, value: &Value) -> Result<usize, &'stati
     Err("Unable to parse usize from value")
 }
 
+pub fn parse_f64_from_value(key: &str, value: &Value) -> ApiResult<f64> {
+    if let Some(val) = value.get(key) {
+        if let Some(str) = val.as_str() {
+            if let Ok(num) = str.parse::<f64>() {
+                return Ok(num);
+            } else {
+                return Err(ApiError::Parsing(
+                    "Unable to parse f64 from value".to_string(),
+                ));
+            }
+        }
+    }
+
+    Err(ApiError::Parsing(
+        "Unable to parse f64 from value".to_string(),
+    ))
+}
+
 /// Generates a random ID.
 ///
 /// # Returns
