@@ -101,8 +101,8 @@ impl BackTest {
             let eval_result = self.strategy.algorithm.lock().await.evaluate(kline.clone());
 
             let order_side = match eval_result {
-                AlgorithmEvalResult::Long => OrderSide::Long,
-                AlgorithmEvalResult::Short => OrderSide::Short,
+                AlgorithmEvalResult::Buy => OrderSide::Buy,
+                AlgorithmEvalResult::Sell => OrderSide::Sell,
                 AlgorithmEvalResult::Ignore => {
                     continue;
                 }
@@ -170,8 +170,8 @@ impl BackTest {
 
         let max_profit = Strategy::calc_max_profit(&trades);
         let max_drawdown = Strategy::calc_max_drawdown(&trades);
-        let long_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Long);
-        let short_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Short);
+        let long_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Buy);
+        let short_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Sell);
         let profit: f64 = Strategy::calc_profit(&trades);
 
         StrategySummary {

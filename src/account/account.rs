@@ -321,14 +321,14 @@ mod test {
 
         // Open a position
         let position = account
-            .open_position("BTCUSD", 1000.0, 10, OrderSide::Long, 50000.0, None, None)
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
             .await
             .unwrap();
 
         assert_eq!(position.symbol, "BTCUSD");
         assert_eq!(position.margin_usd, 1000.0);
         assert_eq!(position.leverage, 10);
-        assert_eq!(position.order_side, OrderSide::Long);
+        assert_eq!(position.order_side, OrderSide::Buy);
 
         assert_eq!(account.positions.len(), 1);
     }
@@ -340,7 +340,7 @@ mod test {
 
         // Open a position
         let position = account
-            .open_position("BTCUSD", 1000.0, 10, OrderSide::Long, 50000.0, None, None)
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
             .await
             .unwrap();
 
@@ -372,9 +372,9 @@ mod test {
             let margin_usd = rand::random::<f64>() * 1000.0;
             let leverage = rand::random::<u32>() % 10 + 1;
             let order_side = if rand::random::<bool>() {
-                OrderSide::Long
+                OrderSide::Buy
             } else {
-                OrderSide::Short
+                OrderSide::Sell
             };
             let open_price = rand::random::<f64>() * 50000.0;
 
@@ -395,23 +395,23 @@ mod test {
 
         let order_long: Vec<Position> = positions
             .iter()
-            .filter(|e| e.order_side == OrderSide::Long)
+            .filter(|e| e.order_side == OrderSide::Buy)
             .map(|e| e.clone())
             .collect();
         let order_short: Vec<Position> = positions
             .iter()
-            .filter(|e| e.order_side == OrderSide::Short)
+            .filter(|e| e.order_side == OrderSide::Sell)
             .map(|e| e.clone())
             .collect();
 
         let tx_long: Vec<TradeTx> = trades
             .iter()
-            .filter(|e| e.position.order_side == OrderSide::Long)
+            .filter(|e| e.position.order_side == OrderSide::Buy)
             .map(|e| e.clone())
             .collect();
         let tx_short: Vec<TradeTx> = trades
             .iter()
-            .filter(|e| e.position.order_side == OrderSide::Short)
+            .filter(|e| e.position.order_side == OrderSide::Sell)
             .map(|e| e.clone())
             .collect();
 
@@ -429,7 +429,7 @@ mod test {
 
         // Open a position
         account
-            .open_position("BTCUSD", 1000.0, 10, OrderSide::Long, 50000.0, None, None)
+            .open_position("BTCUSD", 1000.0, 10, OrderSide::Buy, 50000.0, None, None)
             .await
             .unwrap();
 
@@ -440,7 +440,7 @@ mod test {
         assert_eq!(positions[0].symbol, "BTCUSD");
         assert_eq!(positions[0].margin_usd, 1000.0);
         assert_eq!(positions[0].leverage, 10);
-        assert_eq!(positions[0].order_side, OrderSide::Long);
+        assert_eq!(positions[0].order_side, OrderSide::Buy);
     }
 
     #[test]
@@ -457,7 +457,7 @@ mod test {
                 "BTCUSD",
                 1000.0,
                 10,
-                OrderSide::Long,
+                OrderSide::Buy,
                 50000.0,
                 Some(strategy_id_1),
                 None,
@@ -471,7 +471,7 @@ mod test {
                 "ETHUSD",
                 500.0,
                 5,
-                OrderSide::Short,
+                OrderSide::Sell,
                 2000.0,
                 Some(strategy_id_1),
                 None,
@@ -486,7 +486,7 @@ mod test {
                 "BTCUSD",
                 200.0,
                 2,
-                OrderSide::Long,
+                OrderSide::Buy,
                 48000.0,
                 Some(strategy_id_2),
                 None,

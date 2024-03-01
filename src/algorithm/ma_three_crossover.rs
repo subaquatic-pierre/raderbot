@@ -76,9 +76,9 @@ impl Algorithm for ThreeMaCrossover {
 
             // Placeholder logic for buy/sell decision based on MA crossovers
             if short_ma > medium_ma && medium_ma > long_ma {
-                AlgorithmEvalResult::Long
+                AlgorithmEvalResult::Buy
             } else if short_ma < medium_ma && medium_ma < long_ma {
-                AlgorithmEvalResult::Short
+                AlgorithmEvalResult::Sell
             } else {
                 AlgorithmEvalResult::Ignore
             }

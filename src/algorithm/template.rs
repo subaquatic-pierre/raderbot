@@ -74,8 +74,8 @@ impl Algorithm for CustomAlgorithm {
 // ---
 
 // enum AlgorithmEvalResult {
-//     Long,
-//     Short,
+//     Buy,
+//     Sell,
 //     Ignore,
 // }
 

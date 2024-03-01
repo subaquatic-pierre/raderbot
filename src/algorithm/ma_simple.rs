@@ -53,9 +53,9 @@ impl Algorithm for SimpleMovingAverage {
 
             // Placeholder logic for buy/sell decision based on SMA
             if kline.close > sma {
-                AlgorithmEvalResult::Long
+                AlgorithmEvalResult::Buy
             } else {
-                AlgorithmEvalResult::Short
+                AlgorithmEvalResult::Sell
             }
         } else {
             AlgorithmEvalResult::Ignore

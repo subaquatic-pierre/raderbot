@@ -11,13 +11,13 @@ use uuid::Uuid;
 
 pub type PositionId = Uuid;
 
-/// Enum representing the side of an order (Long or Short).
+/// Enum representing the side of an order (Buy or Sell).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd, Copy)]
 pub enum OrderSide {
-    /// Represents a Long order side.
-    Long,
-    /// Represents a Short order side.
-    Short,
+    /// Represents a Buy order side.
+    Buy,
+    /// Represents a Sell order side.
+    Sell,
 }
 
 impl Display for OrderSide {
@@ -32,8 +32,8 @@ impl Display for OrderSide {
     /// A `std::fmt::Result`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OrderSide::Long => f.write_str("Long"),
-            OrderSide::Short => f.write_str("Short"),
+            OrderSide::Buy => f.write_str("Buy"),
+            OrderSide::Sell => f.write_str("Sell"),
         }
     }
 }
@@ -45,7 +45,7 @@ pub struct Position {
     pub id: PositionId,
     /// The symbol associated with the position.
     pub symbol: String,
-    /// The side of the order (Long or Short).
+    /// The side of the order (Buy or Sell).
     pub order_side: OrderSide,
     /// The time when the position was opened.
     pub open_time: String,
@@ -70,7 +70,7 @@ impl Position {
     ///
     /// * `symbol` - The symbol associated with the position.
     /// * `open_price` - The price at which the position was opened.
-    /// * `order_side` - The side of the order (Long or Short).
+    /// * `order_side` - The side of the order (Buy or Sell).
     /// * `margin_usd` - The margin used for the position in USD.
     /// * `leverage` - The leverage used for the position.
     /// * `stop_loss` - The optional stop loss price for the position.
@@ -168,8 +168,8 @@ impl TradeTx {
         let total_open_usd = self.position.open_price * self.position.quantity;
         let total_close_usd = self.close_price * self.position.quantity;
         match self.position.order_side {
-            OrderSide::Long => total_close_usd - total_open_usd,
-            OrderSide::Short => total_open_usd - total_close_usd,
+            OrderSide::Buy => total_close_usd - total_open_usd,
+            OrderSide::Sell => total_open_usd - total_close_usd,
         }
     }
 }
@@ -184,7 +184,7 @@ mod test {
     async fn test_position_new() {
         let symbol = "BTCUSD";
         let open_price = 50000.0;
-        let order_side = OrderSide::Long;
+        let order_side = OrderSide::Buy;
         let margin_usd = 1000.0;
         let leverage = 10;
         let stop_loss = Some(49000.0);
@@ -214,14 +214,7 @@ mod test {
         let close_price = 51000.0;
         let close_time = generate_ts();
 
-        let position = Position::new(
-            "BTCUSD",
-            50000.0,
-            OrderSide::Long,
-            1000.0,
-            10,
-            Some(49000.0),
-        );
+        let position = Position::new("BTCUSD", 50000.0, OrderSide::Buy, 1000.0, 10, Some(49000.0));
 
         let trade_tx = TradeTx::new(close_price, close_time, position.clone());
 

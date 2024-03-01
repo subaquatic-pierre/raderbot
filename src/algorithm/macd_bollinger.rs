@@ -120,10 +120,10 @@ impl Algorithm for MacdBollingerBands {
 
             if price < lower_band && latest_macd > latest_signal {
                 // Buy signal: price below lower Bollinger Band and MACD crosses above signal line
-                AlgorithmEvalResult::Long
+                AlgorithmEvalResult::Buy
             } else if price > upper_band && latest_macd < latest_signal {
                 // Sell signal: price above upper Bollinger Band and MACD crosses below signal line
-                AlgorithmEvalResult::Short
+                AlgorithmEvalResult::Sell
             } else {
                 AlgorithmEvalResult::Ignore
             }

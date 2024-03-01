@@ -144,8 +144,8 @@ impl Strategy {
                     let order_side = algorithm.lock().await.evaluate(kline.clone());
 
                     let order_side = match order_side {
-                        AlgorithmEvalResult::Long => OrderSide::Long,
-                        AlgorithmEvalResult::Short => OrderSide::Short,
+                        AlgorithmEvalResult::Buy => OrderSide::Buy,
+                        AlgorithmEvalResult::Sell => OrderSide::Sell,
                         AlgorithmEvalResult::Ignore => {
                             continue;
                         }
@@ -333,8 +333,8 @@ impl Strategy {
     ) -> StrategySummary {
         let max_profit = Strategy::calc_max_profit(&trades);
         let max_drawdown = Strategy::calc_max_drawdown(&trades);
-        let long_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Long);
-        let short_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Short);
+        let long_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Buy);
+        let short_trade_count = Strategy::calc_trade_count(&trades, OrderSide::Sell);
         let profit: f64 = Strategy::calc_profit(&trades);
 
         let start_price = match self
@@ -444,7 +444,7 @@ impl Strategy {
     /// # Arguments
     ///
     /// * `trades` - A reference to a vector of `TradeTx` instances representing executed trades.
-    /// * `order_side` - The `OrderSide` (e.g., Long or Short) to filter the trades by.
+    /// * `order_side` - The `OrderSide` (e.g., Buy or Sell) to filter the trades by.
     ///
     /// # Returns
     ///

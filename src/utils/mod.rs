@@ -6,3 +6,4 @@ pub mod json;
 pub mod kline;
 pub mod number;
 pub mod time;
+pub mod trade;

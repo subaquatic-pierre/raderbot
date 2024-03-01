@@ -80,10 +80,10 @@ impl Algorithm for BollingerBands {
         // Example trading logic based on Bollinger Bands
         let result = if kline.close > upper_band {
             // Price is above the upper band - potential sell signal (overbought condition)
-            AlgorithmEvalResult::Short
+            AlgorithmEvalResult::Sell
         } else if kline.close < lower_band {
             // Price is below the lower band - potential buy signal (oversold condition)
-            AlgorithmEvalResult::Long
+            AlgorithmEvalResult::Buy
         } else {
             // Price is within the bands - no clear signal
             AlgorithmEvalResult::Ignore

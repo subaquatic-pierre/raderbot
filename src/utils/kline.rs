@@ -1,4 +1,5 @@
 use chrono::Datelike;
+use log::info;
 
 use std::fs::File;
 
@@ -23,13 +24,14 @@ use csv::Reader;
 /// # Panics
 ///
 /// Panics if the file cannot be opened or if there is an error reading from the file.
+
 pub fn load_binance_klines(
     file_path: std::path::PathBuf,
     symbol: &str,
     interval: &str,
 ) -> Vec<Kline> {
     let filepath_str = file_path.as_os_str().to_str().unwrap();
-    println!("filepath: {filepath_str}");
+    info!("Loading klines from file: {filepath_str}");
     let file = File::open(file_path.clone())
         .unwrap_or_else(|_| panic!("Unable to open file {}", filepath_str));
 
@@ -111,6 +113,8 @@ pub fn interval_symbol_from_binance_filename(filename: &str) -> (String, String)
 /// Panics if the file cannot be created or if there is an error writing to the file.
 pub fn save_klines(filename: std::path::PathBuf, klines: &[Kline], _append: bool) {
     let str_filename = filename.as_os_str().to_string_lossy();
+
+    info!("Saving klines to file: {str_filename}");
 
     let file = File::create(filename.clone()).expect("Unable to create file");
 

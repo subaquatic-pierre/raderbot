@@ -27,8 +27,8 @@ pub struct SignalMessage {
 /// This can indicate a recommendation to enter a long position, enter a short position, or to make no trade (ignore).
 
 pub enum AlgorithmEvalResult {
-    Long,
-    Short,
+    Buy,
+    Sell,
     Ignore,
 }
 

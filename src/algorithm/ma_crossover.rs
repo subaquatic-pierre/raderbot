@@ -66,13 +66,13 @@ impl Algorithm for EmaSmaCrossover {
 
             // EMA crossover signal
             let result = if ema > sma {
-                AlgorithmEvalResult::Long
+                AlgorithmEvalResult::Buy
             } else if ema < sma {
-                AlgorithmEvalResult::Short
+                AlgorithmEvalResult::Sell
             } else if kline.close > sma {
-                AlgorithmEvalResult::Long
+                AlgorithmEvalResult::Buy
             } else if kline.close < sma {
-                AlgorithmEvalResult::Short
+                AlgorithmEvalResult::Sell
             } else {
                 AlgorithmEvalResult::Ignore
             };

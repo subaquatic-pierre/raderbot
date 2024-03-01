@@ -8,6 +8,7 @@ use actix_web::{
 };
 use actix_web::{post, HttpRequest};
 use directories::UserDirs;
+use log::info;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -19,6 +20,7 @@ use crate::utils::kline::{
 };
 use crate::utils::time::{calculate_kline_open_time, get_time_difference};
 use crate::utils::time::{generate_ts, year_month_day_to_ts};
+use crate::utils::trade::{load_binance_agg_trades, save_agg_trades};
 
 #[get("/timestamp")]
 async fn get_ts(_app_data: web::Data<AppState>) -> HttpResponse {
@@ -64,7 +66,7 @@ async fn load_klines(
     // TODO: Use storage manager to save klines
     let user_dirs = UserDirs::new().expect("Failed to get user directories");
     let home_dir = user_dirs.home_dir();
-    let data_dir = home_dir.join("Projects/BinanceData");
+    let data_dir = home_dir.join("Projects/BinanceData/Kline");
 
     let entries = fs::read_dir(data_dir).unwrap();
 
@@ -105,6 +107,63 @@ async fn load_klines(
 
     // Return the stream data as JSON
     let json_data = json!({ "success": "Klines loaded" });
+    HttpResponse::Ok().json(json_data)
+}
+
+#[derive(Deserialize)]
+struct LoadAggTradeParams {
+    filename: String,
+    symbol: String,
+}
+#[post("/load-agg-trades")]
+async fn load_agg_trades(
+    _app_data: web::Data<AppState>,
+    _body: Json<LoadAggTradeParams>,
+) -> impl Responder {
+    // TODO: Use storage manager to save klines
+    let user_dirs = UserDirs::new().expect("Failed to get user directories");
+    let home_dir = user_dirs.home_dir();
+    let data_dir = home_dir.join("Projects/BinanceData/AggTrade");
+
+    let entries = fs::read_dir(data_dir).unwrap();
+
+    let user_dirs = UserDirs::new().expect("Failed to get user directories");
+    let home_dir = user_dirs.home_dir();
+
+    let mut data_dir = home_dir.join(".raderbot");
+    data_dir.push("default");
+    data_dir.push("market");
+    data_dir.push("agg-trades");
+
+    std::fs::create_dir_all(&data_dir).expect("unable to create data directory");
+
+    // Loop over filenames in from directory
+    for entry in entries.flatten() {
+        if entry.file_type().unwrap().is_file() {
+            let file_name = entry
+                .path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+
+            // get symbol from filename
+            let symbol: String = file_name.split("-").collect::<Vec<&str>>()[0]
+                .to_string()
+                .replace("USDT", "-USDT");
+
+            let agg_trades = load_binance_agg_trades(entry.path(), &symbol);
+
+            for (filename, trades) in agg_trades {
+                let data_path = data_dir.as_path();
+                let filepath = data_path.join(&filename);
+                save_agg_trades(filepath, &trades, false);
+            }
+        }
+    }
+
+    // Return the stream data as JSON
+    let json_data = json!({ "success": "Trade Aggregates loaded" });
     HttpResponse::Ok().json(json_data)
 }
 
@@ -165,4 +224,5 @@ pub fn register_utils_service() -> Scope {
         .service(load_klines)
         .service(date_to_timestamp)
         .service(get_sign_hmac)
+        .service(load_agg_trades)
 }

@@ -6,6 +6,8 @@ use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 
+pub const HOUR_24_MILI_SEC: u64 = 86_400_000;
+
 /// Generates a current timestamp in milliseconds since the UNIX epoch.
 ///
 /// # Returns

@@ -114,9 +114,9 @@ impl Algorithm for RsiEmaSma {
             && medium_sma > long_sma
             && short_sma > ema
         {
-            AlgorithmEvalResult::Long
+            AlgorithmEvalResult::Buy
         } else if rsi > 70.0 && short_sma < medium_sma && medium_sma < long_sma && short_sma < ema {
-            AlgorithmEvalResult::Short
+            AlgorithmEvalResult::Sell
         } else {
             AlgorithmEvalResult::Ignore
         };

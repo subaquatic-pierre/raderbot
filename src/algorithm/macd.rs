@@ -89,10 +89,10 @@ impl Algorithm for Macd {
         {
             if latest_macd > latest_signal {
                 // MACD line crosses above the signal line, potential buy signal
-                AlgorithmEvalResult::Long
+                AlgorithmEvalResult::Buy
             } else if latest_macd < latest_signal {
                 // MACD line crosses below the signal line, potential sell signal
-                AlgorithmEvalResult::Short
+                AlgorithmEvalResult::Sell
             } else {
                 AlgorithmEvalResult::Ignore
             }

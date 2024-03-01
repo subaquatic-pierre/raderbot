@@ -66,9 +66,9 @@ impl Algorithm for Rsi {
 
         // Example RSI logic: Buy if RSI < 30 (oversold), Sell if RSI > 70 (overbought), else Ignore
         let result = if rsi < 30.0 {
-            AlgorithmEvalResult::Long
+            AlgorithmEvalResult::Buy
         } else if rsi > 70.0 {
-            AlgorithmEvalResult::Short
+            AlgorithmEvalResult::Sell
         } else {
             AlgorithmEvalResult::Ignore
         };
