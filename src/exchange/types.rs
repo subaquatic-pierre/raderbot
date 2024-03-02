@@ -128,12 +128,13 @@ pub type ArcEsStreamSync = ArcMutex<SplitSink<WebSocketStream<MaybeTlsStream<Tcp
 ///
 /// This enum specifies the types of data streams that can be handled.
 #[allow(non_camel_case_types)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum StreamType {
     /// Represents a Kline stream type.
     Kline,
     /// Represents a Ticker stream type.
     Ticker,
+    MarketTrade,
 }
 
 /// Implementation of the `Display` trait for `StreamType`.
@@ -148,6 +149,7 @@ impl Display for StreamType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // Match on the enum variant to format the display string
         match self {
+            StreamType::MarketTrade => write!(f, "trade"),
             StreamType::Kline => write!(f, "kline"),
             StreamType::Ticker => write!(f, "ticker"),
         }

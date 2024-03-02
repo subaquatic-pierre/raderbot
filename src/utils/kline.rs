@@ -66,8 +66,6 @@ pub fn load_binance_klines(
         let binance_kline: BinanceKline =
             result.unwrap_or_else(|_| panic!("Unable to read Kline in file: {}", filepath_str));
 
-        let symbol = symbol.replace("USDT", "-USDT");
-
         let kline = Kline {
             symbol: symbol.to_string(),
             interval: interval.to_string(),
@@ -172,6 +170,20 @@ pub fn generate_kline_filenames_in_range(kline_key: &str, from_ts: u64, to_ts: u
     }
 
     filenames
+}
+
+pub fn get_min_max_open_time(klines: &[Kline]) -> (u64, u64) {
+    let min_time = klines
+        .iter()
+        .map(|t| t.open_time)
+        .min_by(|x, y| x.partial_cmp(y).unwrap())
+        .unwrap();
+    let max_time = klines
+        .iter()
+        .map(|t| t.open_time)
+        .max_by(|x, y| x.partial_cmp(y).unwrap())
+        .unwrap();
+    (min_time, max_time)
 }
 
 pub fn build_kline_key(symbol: &str, interval: &str) -> String {

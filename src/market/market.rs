@@ -12,6 +12,7 @@ use crate::exchange::api::ExchangeInfo;
 use crate::exchange::stream::build_stream_id;
 use crate::exchange::types::{ApiResult, StreamType};
 use crate::utils::kline::{build_kline_key, build_ticker_key};
+use crate::utils::trade::build_market_trade_key;
 use crate::{
     exchange::{
         api::ExchangeApi,
@@ -27,7 +28,9 @@ use crate::{
     utils::time::generate_ts,
 };
 
+use super::trade::{MarketTrade, MarketTradeData, MarketTradeDataMeta};
 use super::types::ArcMutex;
+use super::volume::MarketTradeVolume;
 
 /// Represents the main market data structure for a trading application, managing market data streams, and integrating with exchange APIs.
 
@@ -182,6 +185,20 @@ impl Market {
             .kline_data(symbol, interval, from_ts, to_ts, limit)
     }
 
+    // TODO: docs
+    pub async fn trade_data(
+        &self,
+        symbol: &str,
+        from_ts: Option<u64>,
+        to_ts: Option<u64>,
+        limit: Option<usize>,
+    ) -> Option<MarketTradeData> {
+        self.data
+            .lock()
+            .await
+            .trade_data(symbol, from_ts, to_ts, limit)
+    }
+
     /// Provides a shared, thread-safe reference to the market data.
     ///
     /// This method grants access to the current state of market data, including Klines and tickers, managed within the Market instance.
@@ -233,13 +250,12 @@ impl Market {
         let url = self
             .exchange_api
             .build_stream_url(symbol, stream_type.clone(), interval);
-        let stream_id = build_stream_id(symbol, interval);
+        let stream_id = build_stream_id(symbol, stream_type, interval);
 
         let interval = interval.map(|s| s.to_owned());
 
         // create new StreamMeta
-        let open_stream_meta =
-            StreamMeta::new(&stream_id, &url, symbol, stream_type.clone(), interval);
+        let open_stream_meta = StreamMeta::new(&stream_id, &url, symbol, stream_type, interval);
         self.exchange_api
             .get_stream_manager()
             .lock()
@@ -307,6 +323,9 @@ impl Market {
                     MarketMessage::UpdateTicker(ticker) => {
                         market_data.lock().await.update_ticker(ticker);
                     }
+                    MarketMessage::UpdateMarketTrade(trade) => {
+                        market_data.lock().await.update_market_trade(trade);
+                    }
                 }
             }
         });
@@ -368,7 +387,7 @@ impl Market {
         let url = self
             .exchange_api
             .build_stream_url(symbol, stream_type, interval);
-        let stream_id = build_stream_id(symbol, interval);
+        let stream_id = build_stream_id(symbol, stream_type, interval);
         let btc_stream_meta = StreamMeta::new(&stream_id, &url, symbol, StreamType::Ticker, None);
 
         needed_streams.push(btc_stream_meta);
@@ -387,11 +406,11 @@ impl Market {
     pub async fn remove_needed_stream(
         &self,
         symbol: &str,
-        _stream_type: StreamType,
+        stream_type: StreamType,
         interval: Option<&str>,
     ) {
         let mut needed_streams = self.needed_streams.lock().await;
-        let stream_id = build_stream_id(symbol, interval);
+        let stream_id = build_stream_id(symbol, stream_type, interval);
 
         needed_streams.retain(|x| x.id != stream_id);
     }
@@ -441,12 +460,13 @@ pub trait MarketDataSymbol {
 pub struct MarketData {
     all_klines: HashMap<String, KlineData>,
     all_tickers: HashMap<String, TickerData>,
+    all_trades: HashMap<String, MarketTradeData>,
     storage_manager: Arc<Box<dyn StorageManager>>,
     last_backup: SystemTime,
 }
 
 /// Specifies the interval in seconds between consecutive backups of market data.
-const BACKUP_INTERVAL: u64 = 20;
+const BACKUP_INTERVAL_SECS: u64 = 300; // 5min
 
 impl MarketData {
     /// Initializes a new instance of MarketData, creating a central repository for both kline and ticker data managed throughout the application lifecycle.
@@ -466,6 +486,7 @@ impl MarketData {
             storage_manager,
             all_klines: HashMap::new(),
             all_tickers: HashMap::new(),
+            all_trades: HashMap::new(),
             last_backup: SystemTime::now(),
         }
     }
@@ -479,8 +500,6 @@ impl MarketData {
     /// - kline: The Kline instance representing the new market data to be added.
     ///
     pub fn add_kline(&mut self, kline: Kline) {
-        // TODO: Ensure memory is recycled, remove old data
-
         // get kline key eg. BTCUSDT@kline_1m
         let kline_key = build_kline_key(&kline.symbol, &kline.interval);
 
@@ -498,28 +517,7 @@ impl MarketData {
                 .insert(kline_key.to_string(), new_kline_data);
         }
 
-        // Save klines to disk if last backup more than 1 minute
-        let time_elapsed = SystemTime::now()
-            .duration_since(self.last_backup)
-            .unwrap_or(Duration::from_secs(0));
-
-        if time_elapsed >= Duration::from_secs(BACKUP_INTERVAL) {
-            for (key, kline_data) in self.all_klines.iter() {
-                let klines: Vec<Kline> = kline_data.klines.clone();
-
-                self.storage_manager
-                    .save_klines(&klines, key)
-                    .expect("Unable to save Klines");
-            }
-
-            // Clear tickers from ticker_data
-            for (_k, kline_data) in self.all_klines.iter_mut() {
-                kline_data.clear_klines();
-            }
-
-            // Update the last backup time
-            self.last_backup = SystemTime::now();
-        }
+        self.handle_data_backup(true);
     }
 
     /// Updates the latest ticker data for a given symbol. If an entry for the symbol exists, it updates the existing data; otherwise, it creates a new entry with the provided ticker information. This method is crucial for maintaining up-to-date market prices and other relevant ticker information.
@@ -542,6 +540,14 @@ impl MarketData {
             self.all_tickers
                 .insert(ticker_key.to_string(), new_ticker_data);
         }
+    }
+
+    // TODO: write docs
+    pub fn update_market_trade(&mut self, trade: MarketTrade) {
+        info!("Update market trade, inside Market, {trade:?}");
+        let now = generate_ts();
+
+        // TODO: implement update market volume
     }
 
     /// Retrieves a range of kline data for a specific symbol and interval, optionally filtered by a start and end timestamp, with a limit on the number of klines returned. This method aggregates data from both in-memory storage and persistent storage, providing a comprehensive view of historical market data.
@@ -574,7 +580,7 @@ impl MarketData {
 
         let mut filtered_klines = self
             .storage_manager
-            .get_klines(symbol, interval, from_ts, to_ts, limit);
+            .get_klines(symbol, interval, from_ts, to_ts);
         filtered_klines.extend_from_slice(&in_mem_kline);
 
         // filtered by from_ts and to_ts
@@ -587,8 +593,6 @@ impl MarketData {
 
         // Sort the klines by open_time in descending order
         filtered_klines.sort_by(|a, b| a.open_time.cmp(&b.open_time));
-
-        // append in mem klines
 
         // Limit the number of data points returned
         if let Some(limit) = limit {
@@ -630,5 +634,85 @@ impl MarketData {
         }
 
         None
+    }
+
+    // TODO: docs
+    pub fn trade_data(
+        &self,
+        symbol: &str,
+        from_ts: Option<u64>,
+        to_ts: Option<u64>,
+        limit: Option<usize>,
+    ) -> Option<MarketTradeData> {
+        let trade_key = build_market_trade_key(symbol);
+
+        let in_mem_trades = match self.all_trades.get(&trade_key) {
+            Some(kline_data) => kline_data.trades.clone(),
+            None => vec![],
+        };
+
+        let mut filtered_trades = self.storage_manager.get_trades(symbol, from_ts, to_ts);
+        filtered_trades.extend_from_slice(&in_mem_trades);
+
+        // filtered by from_ts and to_ts
+        if let Some(from_ts) = from_ts {
+            filtered_trades.retain(|trade| trade.timestamp >= from_ts);
+            if let Some(to_ts) = to_ts {
+                filtered_trades.retain(|trade| trade.timestamp <= to_ts);
+            }
+        }
+
+        filtered_trades.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+
+        // Create a new KlineData object to hold the filtered klines
+        let filtered_trade_data = MarketTradeData {
+            meta: MarketTradeDataMeta {
+                symbol: symbol.to_string(),
+                len: filtered_trades.len() as u64,
+                last_update: generate_ts(),
+            },
+            trades: filtered_trades,
+        };
+
+        if filtered_trade_data.meta.len == 0 {
+            None
+        } else {
+            Some(filtered_trade_data)
+        }
+    }
+
+    // ---
+    // Private methods
+    // ---
+
+    fn handle_data_backup(&mut self, clear_memory: bool) {
+        let time_delta = self.last_backup + Duration::from_secs(BACKUP_INTERVAL_SECS);
+
+        if time_delta < SystemTime::now() {
+            // clear all klines
+            for (key, kline_data) in self.all_klines.iter_mut() {
+                self.storage_manager
+                    .save_klines(&kline_data.klines, key)
+                    .expect("Unable to save Klines");
+
+                if clear_memory {
+                    kline_data.clear_klines()
+                }
+            }
+
+            // Clear tickers from ticker_data
+            for (key, trade_data) in self.all_trades.iter_mut() {
+                self.storage_manager
+                    .save_trades(&trade_data.trades, key)
+                    .expect("Unable to save Klines");
+
+                if clear_memory {
+                    trade_data.clear_trades();
+                }
+            }
+
+            // Update the last backup time
+            self.last_backup = SystemTime::now();
+        }
     }
 }

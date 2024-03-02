@@ -20,6 +20,7 @@ use crate::account::trade::{OrderSide, Position, TradeTx};
 use crate::exchange::api::{ExchangeApi, QueryStr};
 
 use crate::market::messages::MarketMessage;
+use crate::market::trade::MarketTrade;
 use crate::market::types::{ArcMutex, ArcSender};
 use crate::market::{kline::Kline, ticker::Ticker};
 
@@ -199,6 +200,16 @@ impl BingXApi {
 
         // Convert the HMAC value to a string
         hex::encode(result.into_bytes())
+    }
+
+    fn format_bingx_symbol(symbol: &str, lower_case: bool) -> String {
+        let symbol: String = symbol.replace("USDT", "-USDT");
+
+        if lower_case {
+            return symbol.to_lowercase();
+        }
+
+        symbol
     }
 }
 
@@ -559,6 +570,22 @@ impl StreamManager for BingXStreamManager {
                 self.kline_streams
                     .insert(stream_meta.id.clone(), thread_handle);
             }
+            StreamType::MarketTrade => {
+                let market_sender = self.market_sender.clone();
+
+                let thread_handle = tokio::spawn(async move {
+                    loop {
+                        // TODO: Implement get market trade
+                        let trade = MarketTrade::default();
+                        let _ = market_sender.send(MarketMessage::UpdateMarketTrade(trade));
+
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                });
+
+                self.kline_streams
+                    .insert(stream_meta.id.clone(), thread_handle);
+            }
         };
 
         Ok(stream_meta.id.to_string())
@@ -623,6 +650,7 @@ impl StreamManager for BingXStreamManager {
 /// Returns an `ApiResult<Kline>`, which is either the latest Kline data for the symbol and interval if successful, or an error message if the request fails or data is incomplete.
 
 pub async fn get_bingx_kline(symbol: &str, interval: &str) -> ApiResult<Kline> {
+    let symbol = BingXApi::format_bingx_symbol(symbol, false);
     // remove last two letters from interval if interval is {number}min
     // api accepts interval as {number}m
     let _interval = if interval.ends_with('n') {
@@ -637,7 +665,7 @@ pub async fn get_bingx_kline(symbol: &str, interval: &str) -> ApiResult<Kline> {
 
     let client = reqwest::Client::new();
     let query_str = QueryStr::new(vec![
-        ("symbol", symbol),
+        ("symbol", &symbol),
         ("interval", &_interval),
         ("timestamp", &ts),
         ("limit", "1"),
@@ -665,7 +693,7 @@ pub async fn get_bingx_kline(symbol: &str, interval: &str) -> ApiResult<Kline> {
     let data = data[0].clone();
     let data: HashMap<String, Value> = serde_json::from_value(data.to_owned())?;
 
-    let kline = Kline::from_bingx_lookup(data, symbol, interval)?;
+    let kline = Kline::from_bingx_lookup(data, &symbol, interval)?;
 
     Ok(kline)
 }
@@ -685,7 +713,8 @@ pub async fn get_bingx_kline(symbol: &str, interval: &str) -> ApiResult<Kline> {
 pub async fn get_bingx_ticker(symbol: &str) -> ApiResult<Ticker> {
     let client = reqwest::Client::new();
     let ts = generate_ts().to_string();
-    let query_str = QueryStr::new(vec![("symbol", symbol), ("timestamp", &ts)]);
+    let symbol = BingXApi::format_bingx_symbol(symbol, false);
+    let query_str = QueryStr::new(vec![("symbol", &symbol), ("timestamp", &ts)]);
     let url = format!(
         "{}/openApi/swap/v2/quote/ticker?{}",
         BING_X_HOST_URL,

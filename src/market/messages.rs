@@ -1,5 +1,7 @@
 use crate::market::{kline::Kline, ticker::Ticker};
 
+use super::trade::MarketTrade;
+
 /// Represents a message for market data updates within the trading system. This enum encapsulates the different types of market data updates that can occur, specifically updates to tickers and klines. It is used as a communication medium between different components of the system to synchronize market data changes.
 ///
 /// # Variants
@@ -12,4 +14,5 @@ use crate::market::{kline::Kline, ticker::Ticker};
 pub enum MarketMessage {
     UpdateTicker(Ticker),
     UpdateKline(Kline),
+    UpdateMarketTrade(MarketTrade),
 }

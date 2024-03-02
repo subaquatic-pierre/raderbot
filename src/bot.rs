@@ -29,7 +29,7 @@ pub struct RaderBot {
     pub account: ArcMutex<Account>,
     strategy_manager: ArcMutex<StrategyManager>,
     pub exchange_api: Arc<Box<dyn ExchangeApi>>,
-    storage_manager: Arc<Box<dyn StorageManager>>,
+    pub storage_manager: Arc<Box<dyn StorageManager>>,
     strategy_tx: ArcSender<SignalMessage>,
     strategy_rx: ArcReceiver<SignalMessage>,
 }

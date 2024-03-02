@@ -1,6 +1,8 @@
 use csv::ReaderBuilder;
 use directories::UserDirs;
+use log::info;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -10,11 +12,15 @@ use std::io::{self};
 use std::path::{Path, PathBuf};
 
 use crate::market::kline::Kline;
+use crate::market::trade::MarketTrade;
 use crate::strategy::strategy::{StrategyId, StrategyInfo, StrategySummary};
 use crate::utils::kline::{
-    build_kline_filename, build_kline_key, generate_kline_filenames_in_range,
+    build_kline_filename, build_kline_key, generate_kline_filenames_in_range, get_min_max_open_time,
 };
-use crate::utils::time::generate_ts;
+use crate::utils::time::{floor_mili_ts, floor_month_ts, generate_ts, DAY_AS_MILI};
+use crate::utils::trade::{
+    build_market_trade_filename, build_market_trade_key, generate_trade_filenames_in_range,
+};
 
 use super::manager::StorageManager;
 
@@ -57,7 +63,7 @@ impl FsStorageManager {
     ///
     /// Returns an `Option` that contains a vector of `Kline` if the file exists and is successfully read; otherwise `None`.
 
-    pub fn _load_klines(&self, filename: &str) -> Option<Vec<Kline>> {
+    fn _load_klines(&self, filename: &str) -> Option<Vec<Kline>> {
         let mut market_dir = self.data_directory.join("market");
         market_dir.push("klines");
         let file_path = market_dir.join(filename);
@@ -80,6 +86,76 @@ impl FsStorageManager {
         } else {
             None
         }
+    }
+
+    // TODO: docs
+    fn _load_trades(&self, filename: &str) -> Option<Vec<MarketTrade>> {
+        let mut market_dir = self.data_directory.join("market");
+        market_dir.push("trades");
+        let file_path = market_dir.join(filename);
+
+        if let Ok(file) = fs::File::open(file_path) {
+            let mut reader = ReaderBuilder::new().has_headers(false).from_reader(file);
+
+            let mut trades: Vec<MarketTrade> = Vec::new();
+
+            for result in reader.deserialize() {
+                if let Ok(kline) = result {
+                    trades.push(kline);
+                } else {
+                    // Handle error while deserializing kline
+                    return None;
+                }
+            }
+
+            Some(trades)
+        } else {
+            None
+        }
+    }
+
+    // TODO: docs
+    pub fn _merge_klines(&self, existing_klines: &[Kline], fresh_klines: &[Kline]) -> Vec<Kline> {
+        let mut merged = Vec::new();
+
+        if let Some(first_fresh) = fresh_klines.first() {
+            for existing_kline in existing_klines {
+                if existing_kline.open_time < first_fresh.open_time {
+                    merged.push(existing_kline.clone())
+                } else {
+                    break;
+                }
+            }
+            merged.extend_from_slice(fresh_klines);
+        } else {
+            merged.extend_from_slice(existing_klines);
+        }
+
+        merged
+    }
+
+    // TODO: docs
+    pub fn _merge_trades(
+        &self,
+        existing_trades: &[MarketTrade],
+        fresh_trades: &[MarketTrade],
+    ) -> Vec<MarketTrade> {
+        let mut merged = Vec::new();
+
+        if let Some(first_fresh) = fresh_trades.first() {
+            for existing_kline in existing_trades {
+                if existing_kline.timestamp < first_fresh.timestamp {
+                    merged.push(existing_kline.clone())
+                } else {
+                    break;
+                }
+            }
+            merged.extend_from_slice(fresh_trades);
+        } else {
+            merged.extend_from_slice(existing_trades);
+        }
+
+        merged
     }
 
     /// Creates the application directory in the user's home directory if it doesn't already exist.
@@ -160,15 +236,46 @@ impl StorageManager for FsStorageManager {
         market_dir.push("klines");
         std::fs::create_dir_all(&market_dir)?;
 
+        // sort klines into month buckets
+        let mut klines_by_month: HashMap<u64, Vec<Kline>> = HashMap::new();
         for kline in klines {
-            // Build file path
-            let kline_filename = build_kline_filename(kline_key, kline.open_time);
+            let month_ts = floor_month_ts(kline.open_time);
+
+            if let Some(klines) = klines_by_month.get_mut(&month_ts) {
+                klines.push(kline.clone());
+            } else {
+                klines_by_month.insert(month_ts, vec![kline.clone()]);
+            }
+        }
+
+        for (month_ts, mut klines) in klines_by_month {
+            let mut klines_to_save = vec![];
+
+            let kline_filename = build_kline_filename(kline_key, month_ts);
             let file_path = market_dir.join(kline_filename);
 
-            let file_exists = file_path.exists();
+            if file_path.exists() {
+                let mut reader = csv::ReaderBuilder::new()
+                    .has_headers(false)
+                    .from_path(&file_path)?;
+
+                // Read existing klines into a vector
+                let mut existing_klines: Vec<Kline> =
+                    reader.deserialize().collect::<Result<Vec<Kline>, _>>()?;
+
+                // sort klines by open_time
+                existing_klines.sort_by_key(|k| k.open_time);
+                klines.sort_by_key(|k| k.open_time);
+
+                let merged = self._merge_klines(&existing_klines, &klines);
+
+                klines_to_save.extend_from_slice(&merged);
+            } else {
+                klines_to_save.extend_from_slice(&klines);
+            }
 
             let file = OpenOptions::new()
-                .append(true)
+                .write(true)
                 .create(true)
                 .open(&file_path)?;
 
@@ -176,45 +283,11 @@ impl StorageManager for FsStorageManager {
                 .has_headers(false)
                 .from_writer(file);
 
-            if file_exists {
-                // Read the existing klines from the file
-                let mut reader = csv::ReaderBuilder::new()
-                    .has_headers(false)
-                    .from_path(&file_path)?;
-
-                // Read existing klines into a vector
-                let existing_klines: Vec<Kline> =
-                    reader.deserialize().collect::<Result<Vec<Kline>, _>>()?;
-
-                if let Some((last_index, last_existing_kline)) =
-                    existing_klines.iter().enumerate().last()
-                {
-                    if last_existing_kline.open_time == kline.open_time {
-                        // Overwrite the last entry with the new kline
-                        let mut overwrite_file = File::create(&file_path)?;
-                        let mut overwrite_writer = csv::WriterBuilder::new()
-                            .has_headers(false)
-                            .from_writer(&mut overwrite_file);
-
-                        // Write existing klines excluding the last entry
-                        for existing_kline in &existing_klines[..last_index] {
-                            overwrite_writer.serialize(existing_kline)?;
-                        }
-
-                        // Write the new kline
-                        overwrite_writer.serialize(kline)?;
-                    } else {
-                        // Append the new kline to the existing file
-                        writer.serialize(kline)?;
-                    }
-                } else {
-                    // Append the new kline to the existing file
-                    writer.serialize(kline)?;
-                }
-            } else {
-                // Serialize and write the kline to the file
-                writer.serialize(kline)?;
+            for kline in klines_to_save {
+                writer.serialize(kline)?
             }
+
+            writer.flush()?
         }
 
         Ok(())
@@ -240,7 +313,6 @@ impl StorageManager for FsStorageManager {
         interval: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
-        _limit: Option<usize>,
     ) -> Vec<Kline> {
         let kline_key = build_kline_key(symbol, interval);
 
@@ -347,5 +419,107 @@ impl StorageManager for FsStorageManager {
         // Deserialize the JSON string into a data structure
         let data: StrategySummary = serde_json::from_str(&json_str)?;
         Ok(data)
+    }
+
+    // TODO: Docs
+    fn get_trades(
+        &self,
+        symbol: &str,
+        from_ts: Option<u64>,
+        to_ts: Option<u64>,
+    ) -> Vec<MarketTrade> {
+        let trade_key = build_market_trade_key(symbol);
+
+        // create filtered klines to hold all klines which are filtered
+        let mut filtered_trades: Vec<MarketTrade> = Vec::new();
+
+        let filenames = match from_ts {
+            Some(from_ts) => match to_ts {
+                Some(to_ts) => Some(generate_trade_filenames_in_range(
+                    &trade_key, from_ts, to_ts,
+                )),
+                None => Some(generate_trade_filenames_in_range(
+                    &trade_key,
+                    from_ts,
+                    generate_ts(),
+                )),
+            },
+            None => None,
+        };
+
+        if let Some(filenames) = filenames {
+            for trade_filename in filenames {
+                if let Some(trades) = self._load_trades(&trade_filename) {
+                    filtered_trades.extend_from_slice(&trades);
+                }
+            }
+        };
+
+        filtered_trades
+    }
+
+    // TODO: docs
+    fn save_trades(&self, trades: &[MarketTrade], trade_key: &str) -> io::Result<()> {
+        // Build market directory and subdirectory for klines
+        let mut market_dir = self.data_directory.join("market");
+        market_dir.push("trades");
+        std::fs::create_dir_all(&market_dir)?;
+
+        let mut trades_by_day: HashMap<u64, Vec<MarketTrade>> = HashMap::new();
+        for trade in trades {
+            let ts = floor_mili_ts(trade.timestamp, DAY_AS_MILI);
+            if let Some(trades) = trades_by_day.get_mut(&ts) {
+                trades.push(trade.clone())
+            } else {
+                trades_by_day.insert(ts, vec![trade.clone()]);
+            }
+        }
+
+        for (trade_ts, mut trades) in trades_by_day {
+            // Build file path
+            let trade_filename = build_market_trade_filename(trade_key, trade_ts);
+            let mut trades_to_save = vec![];
+
+            let file_path = market_dir.join(trade_filename);
+
+            if file_path.exists() {
+                let mut reader = csv::ReaderBuilder::new()
+                    .has_headers(false)
+                    .from_path(&file_path)?;
+
+                // Read existing klines into a vector
+                let mut existing_trades: Vec<MarketTrade> =
+                    reader
+                        .deserialize()
+                        .collect::<Result<Vec<MarketTrade>, _>>()?;
+
+                // sort klines by open_time
+                existing_trades.sort_by_key(|k| k.timestamp);
+                trades.sort_by_key(|k| k.timestamp);
+
+                let merged = self._merge_trades(&existing_trades, &trades);
+
+                trades_to_save.extend_from_slice(&merged);
+            } else {
+                trades_to_save.extend_from_slice(&trades);
+            }
+
+            let file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(&file_path)?;
+
+            let mut writer = csv::WriterBuilder::new()
+                .has_headers(false)
+                .from_writer(file);
+
+            for kline in trades_to_save {
+                writer.serialize(kline)?
+            }
+
+            writer.flush()?
+        }
+
+        Ok(())
     }
 }

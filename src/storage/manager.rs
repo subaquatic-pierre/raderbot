@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::io::{self};
 
+use crate::market::trade::MarketTrade;
 use crate::strategy::strategy::StrategyInfo;
 use crate::{
     market::kline::Kline,
@@ -27,8 +28,17 @@ pub trait StorageManager: Send + Sync {
         interval: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
-        limit: Option<usize>,
     ) -> Vec<Kline>;
+
+    // TODO: Docs
+    fn get_trades(
+        &self,
+        symbol: &str,
+        from_ts: Option<u64>,
+        to_ts: Option<u64>,
+    ) -> Vec<MarketTrade>;
+
+    fn save_trades(&self, trades: &[MarketTrade], trade_key: &str) -> io::Result<()>;
 
     /// Lists saved strategy information.
     ///

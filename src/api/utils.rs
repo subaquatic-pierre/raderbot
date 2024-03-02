@@ -20,7 +20,7 @@ use crate::utils::kline::{
 };
 use crate::utils::time::{calculate_kline_open_time, get_time_difference};
 use crate::utils::time::{generate_ts, year_month_day_to_ts};
-use crate::utils::trade::{load_binance_agg_trades, save_agg_trades};
+use crate::utils::trade::{build_market_trade_key, load_binance_agg_trades, save_trades};
 
 #[get("/timestamp")]
 async fn get_ts(_app_data: web::Data<AppState>) -> HttpResponse {
@@ -53,32 +53,23 @@ async fn date_to_timestamp(body: Json<DateToTsParams>) -> impl Responder {
 }
 
 #[derive(Debug, Deserialize)]
-struct LoadKlineParams {
+struct BootstrapKlinesParams {
     filename: String,
     symbol: String,
     interval: String,
 }
-#[post("/load-klines")]
+#[post("/bootstrap-historical-klines")]
 async fn load_klines(
-    _app_data: web::Data<AppState>,
-    _body: Json<LoadKlineParams>,
+    app_data: web::Data<AppState>,
+    _body: Json<BootstrapKlinesParams>,
 ) -> impl Responder {
-    // TODO: Use storage manager to save klines
+    let storage_manager = app_data.get_storage_manager().await;
+
     let user_dirs = UserDirs::new().expect("Failed to get user directories");
     let home_dir = user_dirs.home_dir();
     let data_dir = home_dir.join("Projects/BinanceData/Kline");
 
     let entries = fs::read_dir(data_dir).unwrap();
-
-    let user_dirs = UserDirs::new().expect("Failed to get user directories");
-    let home_dir = user_dirs.home_dir();
-
-    let mut data_dir = home_dir.join(".raderbot");
-    data_dir.push("default");
-    data_dir.push("market");
-    data_dir.push("klines");
-
-    std::fs::create_dir_all(&data_dir).expect("unable to create data directory");
 
     // Loop over filenames in from directory
     for entry in entries.flatten() {
@@ -95,13 +86,10 @@ async fn load_klines(
             let kline_key = build_kline_key(&symbol, &interval);
 
             let klines = load_binance_klines(entry.path(), &symbol, &interval);
-            let kline_filename = build_kline_filename(&kline_key, klines[0].open_time);
 
-            let new_filename = kline_filename.replace("USDT", "-USDT");
-
-            let file_path = data_dir.join(new_filename);
-
-            save_klines(file_path, &klines, false);
+            if let Err(e) = storage_manager.save_klines(&klines, &kline_key) {
+                info!("Unable to save klines: {e}");
+            }
         }
     }
 
@@ -111,34 +99,25 @@ async fn load_klines(
 }
 
 #[derive(Deserialize)]
-struct LoadAggTradeParams {
+struct BootstrapTradesParams {
     filename: String,
     symbol: String,
 }
-#[post("/load-agg-trades")]
-async fn load_agg_trades(
-    _app_data: web::Data<AppState>,
-    _body: Json<LoadAggTradeParams>,
+#[post("/bootstrap-historical-trades")]
+async fn bootstrap_historical_trades(
+    app_data: web::Data<AppState>,
+    _body: Json<BootstrapTradesParams>,
 ) -> impl Responder {
-    // TODO: Use storage manager to save klines
-    let user_dirs = UserDirs::new().expect("Failed to get user directories");
-    let home_dir = user_dirs.home_dir();
-    let data_dir = home_dir.join("Projects/BinanceData/AggTrade");
-
-    let entries = fs::read_dir(data_dir).unwrap();
+    let storage_manager = app_data.get_storage_manager().await;
 
     let user_dirs = UserDirs::new().expect("Failed to get user directories");
     let home_dir = user_dirs.home_dir();
+    let data_dir = home_dir.join("Projects/BinanceData/MarketTrade");
 
-    let mut data_dir = home_dir.join(".raderbot");
-    data_dir.push("default");
-    data_dir.push("market");
-    data_dir.push("agg-trades");
-
-    std::fs::create_dir_all(&data_dir).expect("unable to create data directory");
+    let org_entries = fs::read_dir(data_dir).unwrap();
 
     // Loop over filenames in from directory
-    for entry in entries.flatten() {
+    for entry in org_entries.flatten() {
         if entry.file_type().unwrap().is_file() {
             let file_name = entry
                 .path()
@@ -148,16 +127,13 @@ async fn load_agg_trades(
                 .into_owned();
 
             // get symbol from filename
-            let symbol: String = file_name.split("-").collect::<Vec<&str>>()[0]
-                .to_string()
-                .replace("USDT", "-USDT");
+            let symbol: String = file_name.split("-").collect::<Vec<&str>>()[0].to_string();
 
             let agg_trades = load_binance_agg_trades(entry.path(), &symbol);
+            let trade_key = build_market_trade_key(&symbol);
 
-            for (filename, trades) in agg_trades {
-                let data_path = data_dir.as_path();
-                let filepath = data_path.join(&filename);
-                save_agg_trades(filepath, &trades, false);
+            if let Err(e) = storage_manager.save_trades(&agg_trades, &trade_key) {
+                info!("Unable to save trades: {e}");
             }
         }
     }
@@ -169,7 +145,7 @@ async fn load_agg_trades(
 
 #[get("/sign-hmac")]
 async fn get_sign_hmac(_app_data: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
-    let secret_key = "NhqPtmdSJYdKjVHjA7PZj4Mge3R5YNiP1e3UZjInClVN65XAbvqqM6A7H5fATj0j";
+    let secret_key = "";
     let data = "timestamp=1578963600000";
     let signature = sign_hmac(secret_key, data);
     // Return the stream data as JSON
@@ -224,5 +200,5 @@ pub fn register_utils_service() -> Scope {
         .service(load_klines)
         .service(date_to_timestamp)
         .service(get_sign_hmac)
-        .service(load_agg_trades)
+        .service(bootstrap_historical_trades)
 }

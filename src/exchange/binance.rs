@@ -20,6 +20,7 @@ use crate::account::trade::{OrderSide, Position, TradeTx};
 use crate::exchange::api::{ExchangeApi, QueryStr};
 use crate::exchange::types::ArcEsStreamSync;
 use crate::market::messages::MarketMessage;
+use crate::market::trade::MarketTrade;
 use crate::market::types::{ArcMutex, ArcSender};
 use crate::market::{kline::Kline, ticker::Ticker};
 use crate::utils::number::{parse_f64_from_lookup, parse_f64_from_value, parse_usize_from_value};
@@ -221,15 +222,11 @@ impl BinanceApi {
     }
 
     fn format_binance_symbol(symbol: &str, lower_case: bool) -> String {
-        let split = symbol.split("-");
-        let strings: Vec<&str> = split.collect();
-        let string = strings.join("");
-
         if lower_case {
-            return string.to_lowercase();
+            return symbol.to_lowercase();
         }
 
-        string
+        symbol.to_string()
     }
 }
 
@@ -559,6 +556,13 @@ impl ExchangeApi for BinanceApi {
                     BinanceApi::format_binance_symbol(symbol, true)
                 )
             }
+            StreamType::MarketTrade => {
+                format!(
+                    "{}/ws/{}@aggTrade",
+                    self.ws_host,
+                    BinanceApi::format_binance_symbol(symbol, true)
+                )
+            }
         };
 
         url
@@ -662,11 +666,7 @@ impl StreamManager for BinanceStreamManager {
                                         let lookup: HashMap<String, Value> =
                                             serde_json::from_str(&text).unwrap();
 
-                                        // build kline from hashmap
-
-                                        let kline = Kline::from_binance_lookup(lookup);
-
-                                        if let Ok(kline) = kline {
+                                        if let Ok(kline) = Kline::from_binance_lookup(lookup) {
                                             let _ = market_sender
                                                 .send(MarketMessage::UpdateKline(kline));
                                         }
@@ -675,12 +675,19 @@ impl StreamManager for BinanceStreamManager {
                                         let lookup: HashMap<String, Value> =
                                             serde_json::from_str(&text).unwrap();
 
-                                        // build kline from hashmap
-                                        let ticker = Ticker::from_binance_lookup(lookup);
-
-                                        if let Ok(ticker) = ticker {
+                                        if let Ok(ticker) = Ticker::from_binance_lookup(lookup) {
                                             let _ = market_sender
                                                 .send(MarketMessage::UpdateTicker(ticker));
+                                        }
+                                    }
+                                    StreamType::MarketTrade => {
+                                        let lookup: HashMap<String, Value> =
+                                            serde_json::from_str(&text).unwrap();
+
+                                        if let Ok(trade) = MarketTrade::from_binance_lookup(lookup)
+                                        {
+                                            let _ = market_sender
+                                                .send(MarketMessage::UpdateMarketTrade(trade));
                                         }
                                     }
                                 }

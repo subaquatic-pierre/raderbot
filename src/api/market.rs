@@ -12,6 +12,7 @@ use serde_json::json;
 use crate::exchange::types::StreamType;
 
 use crate::app::AppState;
+use crate::market::volume::MarketTradeVolume;
 use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]
@@ -58,6 +59,120 @@ async fn get_ticker_data(
         HttpResponse::Ok().json(json_data)
     } else {
         let json_data = json!({ "error": "Ticker data not found" });
+        // Stream ID not found
+        HttpResponse::Ok().json(json_data)
+    }
+}
+
+#[derive(Deserialize)]
+struct GetMarketTradesParams {
+    symbol: String,
+    from_ts: Option<String>,
+    to_ts: Option<String>,
+    limit: Option<usize>,
+    price_granularity: Option<usize>,
+    time_interval: Option<String>,
+}
+#[post("/trade-data")]
+async fn get_trade_data(
+    app_data: web::Data<AppState>,
+    body: Json<GetMarketTradesParams>,
+) -> impl Responder {
+    let market = app_data.get_market().await;
+
+    let mut from_ts: Option<u64> = None;
+    let mut to_ts: Option<u64> = None;
+
+    if let Some(ts) = &body.to_ts {
+        let _ts = string_to_timestamp(ts);
+        if _ts.is_err() {
+            let json_data = json!({ "error": "Unable to parse dates".to_string()});
+            return HttpResponse::ExpectationFailed().json(json_data);
+        }
+        let _ts = _ts.unwrap();
+        to_ts = Some(_ts);
+    };
+
+    if let Some(ts) = &body.from_ts {
+        let _ts = string_to_timestamp(ts);
+        if _ts.is_err() {
+            let json_data = json!({ "error": "Unable to parse dates".to_string()});
+            return HttpResponse::ExpectationFailed().json(json_data);
+        }
+        let _ts = _ts.unwrap();
+        from_ts = Some(_ts);
+    };
+
+    let trade_data = market
+        .lock()
+        .await
+        .trade_data(&body.symbol, from_ts, to_ts, body.limit)
+        .await;
+
+    if let Some(trade_data) = trade_data {
+        // Return the stream data as JSON
+        let json_data = json!({ "trade_data": trade_data });
+        HttpResponse::Ok().json(json_data)
+    } else {
+        let json_data = json!({ "error": "Trade Data data not found" });
+        // Stream ID not found
+        HttpResponse::Ok().json(json_data)
+    }
+}
+
+#[post("/trade-volume-data")]
+async fn get_volume_data(
+    app_data: web::Data<AppState>,
+    body: Json<GetMarketTradesParams>,
+) -> impl Responder {
+    let market = app_data.get_market().await;
+
+    let mut from_ts: Option<u64> = None;
+    let mut to_ts: Option<u64> = None;
+
+    if let Some(ts) = &body.to_ts {
+        let _ts = string_to_timestamp(ts);
+        if _ts.is_err() {
+            let json_data = json!({ "error": "Unable to parse dates".to_string()});
+            return HttpResponse::ExpectationFailed().json(json_data);
+        }
+        let _ts = _ts.unwrap();
+        to_ts = Some(_ts);
+    };
+
+    if let Some(ts) = &body.from_ts {
+        let _ts = string_to_timestamp(ts);
+        if _ts.is_err() {
+            let json_data = json!({ "error": "Unable to parse dates".to_string()});
+            return HttpResponse::ExpectationFailed().json(json_data);
+        }
+        let _ts = _ts.unwrap();
+        from_ts = Some(_ts);
+    };
+
+    let trade_data = market
+        .lock()
+        .await
+        .trade_data(&body.symbol, from_ts, to_ts, body.limit)
+        .await;
+
+    if let Some(trade_data) = trade_data {
+        let time_interval = body
+            .time_interval
+            .clone()
+            .unwrap_or_else(|| "1h".to_string());
+
+        let market_volume = MarketTradeVolume::new();
+        let bucket_volume = market_volume.calc_volume_buckets(
+            &trade_data.trades,
+            body.price_granularity.unwrap_or_else(|| 10),
+            &time_interval,
+        );
+        // Return the stream data as JSON
+        let json_data = json!({ "volume_data": bucket_volume });
+        HttpResponse::Ok().json(json_data)
+    } else {
+        let json_data = json!({ "error": "Trade Data data not found" });
         // Stream ID not found
         HttpResponse::Ok().json(json_data)
     }
@@ -204,10 +319,10 @@ async fn open_stream(
     let market = app_data.get_market().await;
 
     // TODO: handle errors
+    let symbol = body.symbol.to_string();
 
     let stream_id = match stream_type {
         StreamType::Kline => {
-            let symbol = body.symbol.to_string();
             let interval = body.interval.clone().unwrap().to_string();
             market
                 .lock()
@@ -216,7 +331,13 @@ async fn open_stream(
                 .await
         }
         StreamType::Ticker => {
-            let symbol = body.symbol.to_string();
+            market
+                .lock()
+                .await
+                .open_stream(stream_type, &symbol, None)
+                .await
+        }
+        StreamType::MarketTrade => {
             market
                 .lock()
                 .await
@@ -247,4 +368,6 @@ pub fn register_market_service() -> Scope {
         .service(market_info)
         .service(active_streams)
         .service(get_ticker_data)
+        .service(get_trade_data)
+        .service(get_volume_data)
 }

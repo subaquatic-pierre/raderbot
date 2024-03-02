@@ -8,16 +8,16 @@ use crate::{
     account::trade::OrderSide,
     market::{
         kline::{BinanceKline, Kline},
-        trade::AggTrade,
+        trade::MarketTrade,
     },
     utils::{
         csv::has_header,
-        time::{timestamp_to_datetime, HOUR_24_MILI_SEC},
+        time::{timestamp_to_datetime, DAY_AS_MILI},
     },
 };
 use csv::Reader;
 
-use super::time::string_to_timestamp;
+use super::time::{floor_mili_ts, string_to_timestamp, SEC_AS_MILI};
 
 #[derive(Deserialize)]
 struct BinanceAggTradeCsvRow {
@@ -31,13 +31,11 @@ struct BinanceAggTradeCsvRow {
     is_buyer_maker: bool,
 }
 
-pub fn load_binance_agg_trades(
-    file_path: std::path::PathBuf,
-    symbol: &str,
-) -> HashMap<String, Vec<AggTrade>> {
+pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> Vec<MarketTrade> {
+    let mut trades = vec![];
     let filepath_str = file_path.as_os_str().to_str().unwrap();
     info!("Loading Aggregate Trade Data from file: {filepath_str}");
-    let mut data: HashMap<String, Vec<AggTrade>> = HashMap::new();
+    let mut data: HashMap<String, Vec<MarketTrade>> = HashMap::new();
 
     if let Err(e) = File::open(file_path.clone()) {
         info!("{e}")
@@ -66,10 +64,6 @@ pub fn load_binance_agg_trades(
             .from_reader(file)
     };
 
-    // Create TS of beginning of time
-    // let time = timestamp_to_datetime(SystemTime::UNIX_EPOCH);
-    let mut last_day_ts: u64 = 0;
-
     for result in reader.deserialize::<BinanceAggTradeCsvRow>() {
         if let Err(e) = result {
             info!("{e}")
@@ -77,47 +71,31 @@ pub fn load_binance_agg_trades(
             let row: BinanceAggTradeCsvRow =
                 result.unwrap_or_else(|_| panic!("Unable to read Kline in file: {}", filepath_str));
 
-            let date_str = if row.transact_time > last_day_ts {
-                let time = timestamp_to_datetime(row.transact_time);
-                let last_day_str = time.format("%Y-%m-%dT00:00:00Z").to_string();
-                last_day_ts = string_to_timestamp(&last_day_str).unwrap();
-                time.format("%Y-%m-%d").to_string()
-            } else {
-                let time = timestamp_to_datetime(last_day_ts);
-
-                time.format("%Y-%m-%d").to_string()
-            };
-
             let order_side = if row.is_buyer_maker {
                 OrderSide::Sell
             } else {
                 OrderSide::Buy
             };
 
-            let agg_trade = AggTrade {
-                ts: row.transact_time,
+            let market_trade = MarketTrade {
+                id: row.agg_trade_id,
+                timestamp: row.transact_time,
                 price: row.price,
                 symbol: symbol.to_string(),
                 qty: row.quantity,
                 order_side,
             };
 
-            let filename = format!("{symbol}@aggTrades-{date_str}.csv");
-
-            if let Some(agg_trades) = data.get_mut(&filename) {
-                agg_trades.push(agg_trade);
-            } else {
-                data.insert(filename.clone(), vec![agg_trade]);
-            };
+            trades.push(market_trade);
         }
     }
 
-    data
+    trades
 }
 
-pub fn save_agg_trades(filename: std::path::PathBuf, trades: &[AggTrade], _append: bool) {
+pub fn save_trades(filename: std::path::PathBuf, trades: &[MarketTrade], _append: bool) {
     let str_filename = filename.as_os_str().to_string_lossy();
-    info!("Saving AggTrades to new file: {str_filename}");
+    info!("Saving Trades to new file: {str_filename}");
 
     let file = File::create(filename.clone()).expect("Unable to create file");
 
@@ -131,4 +109,30 @@ pub fn save_agg_trades(filename: std::path::PathBuf, trades: &[AggTrade], _appen
             panic!("Unable to save kline: {:?} to file:{}", trade, str_filename)
         });
     }
+}
+
+pub fn build_market_trade_key(symbol: &str) -> String {
+    format!("{}@trade", symbol)
+}
+
+pub fn build_market_trade_filename(trade_key: &str, timestamp: u64) -> String {
+    let time = timestamp_to_datetime(timestamp);
+    let date_str = time.format("%Y-%m-%d").to_string();
+    format!("{trade_key}-{date_str}.csv")
+}
+
+pub fn generate_trade_filenames_in_range(trade_key: &str, from_ts: u64, to_ts: u64) -> Vec<String> {
+    let start_day = floor_mili_ts(from_ts, DAY_AS_MILI);
+    let end_day = floor_mili_ts(to_ts, DAY_AS_MILI);
+    let mut filenames = Vec::new();
+
+    let mut current_ts = start_day;
+    while current_ts <= end_day {
+        let filename = build_market_trade_filename(trade_key, current_ts);
+        filenames.push(filename);
+
+        current_ts += DAY_AS_MILI;
+    }
+
+    filenames
 }

@@ -1,12 +1,16 @@
 use chrono::prelude::DateTime;
+use chrono::Datelike;
+use chrono::NaiveDate;
+use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use dateparser::parse;
 use std::time::{Duration, SystemTime};
 
-use chrono::NaiveDate;
-use chrono::NaiveDateTime;
-use chrono::Utc;
-
-pub const HOUR_24_MILI_SEC: u64 = 86_400_000;
+pub const SEC_AS_MILI: u64 = 1000;
+pub const MIN_AS_MILI: u64 = SEC_AS_MILI * 60; // 60000
+pub const HOUR_AS_MILI: u64 = MIN_AS_MILI * 60; // 3600000
+pub const DAY_AS_MILI: u64 = HOUR_AS_MILI * 24; // 86400000
 
 /// Generates a current timestamp in milliseconds since the UNIX epoch.
 ///
@@ -185,6 +189,48 @@ pub fn build_interval(interval: &str) -> Result<Duration, &'static str> {
         "1h" => Ok(Duration::from_secs(3600)),
         _ => Err("Unsupported interval"),
     }
+}
+
+// TODO: docs
+pub fn floor_mili_ts(timestamp_millis: u64, mili_sec: u64) -> u64 {
+    let floored_intervals = timestamp_millis / mili_sec;
+    floored_intervals * mili_sec
+}
+
+/// Converts a Unix timestamp in milliseconds to the start of the month in which it falls.
+///
+/// # Arguments
+///
+/// * `open_time` - A Unix timestamp in milliseconds representing the time of interest.
+///
+/// # Returns
+///
+/// * A Unix timestamp in milliseconds representing the start of the month.
+pub fn floor_month_ts(open_time: u64) -> u64 {
+    // Convert the Unix timestamp in milliseconds to a DateTime<Utc>
+    let datetime = Utc.timestamp_millis_opt(open_time as i64).unwrap();
+
+    // Construct a new DateTime<Utc> representing the first day of the month at 00:00:00 hours
+    let start_of_month = Utc
+        .with_ymd_and_hms(datetime.year(), datetime.month(), 1, 0, 0, 0)
+        .unwrap();
+
+    // Convert back to a Unix timestamp in milliseconds
+    start_of_month.timestamp_millis() as u64
+}
+
+// TODO: docs
+pub fn add_month_to_timestamp(timestamp: i64) -> i64 {
+    let datetime = Utc.timestamp_millis_opt(timestamp).unwrap();
+    let next_month = if datetime.month() == 12 {
+        Utc.with_ymd_and_hms(datetime.year() + 1, 1, 1, 0, 0, 0)
+            .unwrap()
+    } else {
+        Utc.with_ymd_and_hms(datetime.year(), datetime.month() + 1, 1, 0, 0, 0)
+            .unwrap()
+    };
+
+    next_month.timestamp_millis()
 }
 
 #[cfg(test)]

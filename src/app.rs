@@ -7,6 +7,7 @@ use crate::{
     bot::RaderBot,
     exchange::api::ExchangeApi,
     market::{market::Market, types::ArcMutex},
+    storage::manager::StorageManager,
 };
 
 /// Represents the shared state of the application.
@@ -42,6 +43,10 @@ impl AppState {
     /// An `ArcMutex<Market>` allowing safe, concurrent access to market data.
     pub async fn get_market(&self) -> ArcMutex<Market> {
         self.bot.lock().await.market.clone()
+    }
+
+    pub async fn get_storage_manager(&self) -> Arc<Box<dyn StorageManager>> {
+        self.bot.lock().await.storage_manager.clone()
     }
 
     /// Retrieves a shared, thread-safe reference to the `ExchangeApi` component.

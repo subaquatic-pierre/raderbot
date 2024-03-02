@@ -145,10 +145,20 @@ impl Default for StreamMeta {
 /// # Returns
 ///
 /// Returns the ID of the stream.
-pub fn build_stream_id(symbol: &str, interval: Option<&str>) -> String {
-    if let Some(interval) = interval {
-        format!("{}@kline_{}", symbol, interval)
-    } else {
-        format!("{}@ticker", symbol)
+pub fn build_stream_id(symbol: &str, stream_type: StreamType, interval: Option<&str>) -> String {
+    match stream_type {
+        StreamType::Kline => {
+            if let Some(interval) = interval {
+                format!("{}@kline_{}", symbol, interval)
+            } else {
+                format!("{}@ticker", symbol)
+            }
+        }
+        StreamType::Ticker => {
+            format!("{}@ticker", symbol)
+        }
+        StreamType::MarketTrade => {
+            format!("{}@trade", symbol)
+        }
     }
 }
