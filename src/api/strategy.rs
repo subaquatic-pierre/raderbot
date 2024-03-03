@@ -173,7 +173,7 @@ async fn list_active_strategies(app_data: web::Data<AppState>) -> impl Responder
 async fn list_historical_strategies(app_data: web::Data<AppState>) -> impl Responder {
     let bot = app_data.bot.clone();
 
-    let summaries = bot.lock().await.list_historical_strategies();
+    let summaries = bot.lock().await.list_historical_strategies().await;
 
     let json_data = json!({ "strategy_infos": summaries });
 
@@ -190,6 +190,7 @@ async fn historical_strategy_summary(
         .lock()
         .await
         .get_historical_strategy_summary(body.strategy_id)
+        .await
     {
         let json_data = json!({ "strategy_summary": summary });
 

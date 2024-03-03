@@ -1,3 +1,4 @@
+use actix_web::cookie::time::Instant;
 use chrono::prelude::DateTime;
 use chrono::Datelike;
 use chrono::NaiveDate;
@@ -5,6 +6,7 @@ use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use dateparser::parse;
+
 use std::time::{Duration, SystemTime};
 
 pub const SEC_AS_MILI: u64 = 1000;
@@ -231,6 +233,16 @@ pub fn add_month_to_timestamp(timestamp: i64) -> i64 {
     };
 
     next_month.timestamp_millis()
+}
+
+pub fn start_timer() -> Instant {
+    Instant::now()
+}
+
+/// Calculates the duration between the given `start` instant and the current moment.
+/// Returns the duration as `Duration`.
+pub fn elapsed_time(start: Instant) -> actix_web::cookie::time::Duration {
+    start.elapsed()
 }
 
 #[cfg(test)]

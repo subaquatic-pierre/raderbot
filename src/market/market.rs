@@ -2,6 +2,7 @@ use futures::StreamExt;
 
 use log::info;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use std::time::{Duration, SystemTime};
 use std::{collections::HashMap, sync::Arc};
@@ -183,6 +184,7 @@ impl Market {
             .lock()
             .await
             .kline_data(symbol, interval, from_ts, to_ts, limit)
+            .await
     }
 
     // TODO: docs
@@ -197,6 +199,7 @@ impl Market {
             .lock()
             .await
             .trade_data(symbol, from_ts, to_ts, limit)
+            .await
     }
 
     /// Provides a shared, thread-safe reference to the market data.
@@ -318,13 +321,13 @@ impl Market {
 
                 match message {
                     MarketMessage::UpdateKline(kline) => {
-                        market_data.lock().await.add_kline(kline);
+                        market_data.lock().await.add_kline(kline).await;
                     }
                     MarketMessage::UpdateTicker(ticker) => {
                         market_data.lock().await.update_ticker(ticker);
                     }
                     MarketMessage::UpdateMarketTrade(trade) => {
-                        market_data.lock().await.update_market_trade(trade);
+                        market_data.lock().await.update_market_trade(trade).await;
                     }
                 }
             }
@@ -499,7 +502,7 @@ impl MarketData {
     ///
     /// - kline: The Kline instance representing the new market data to be added.
     ///
-    pub fn add_kline(&mut self, kline: Kline) {
+    pub async fn add_kline(&mut self, kline: Kline) {
         // get kline key eg. BTCUSDT@kline_1m
         let kline_key = build_kline_key(&kline.symbol, &kline.interval);
 
@@ -517,7 +520,7 @@ impl MarketData {
                 .insert(kline_key.to_string(), new_kline_data);
         }
 
-        self.handle_data_backup(true);
+        self.handle_data_backup(true).await;
     }
 
     /// Updates the latest ticker data for a given symbol. If an entry for the symbol exists, it updates the existing data; otherwise, it creates a new entry with the provided ticker information. This method is crucial for maintaining up-to-date market prices and other relevant ticker information.
@@ -543,9 +546,20 @@ impl MarketData {
     }
 
     // TODO: write docs
-    pub fn update_market_trade(&mut self, trade: MarketTrade) {
+    pub async fn update_market_trade(&mut self, trade: MarketTrade) {
+        let trade_key = build_market_trade_key(&trade.symbol);
         info!("Update market trade, inside Market, {trade:?}");
-        let now = generate_ts();
+
+        if let Some(trade_data) = self.all_trades.get_mut(&trade_key) {
+            trade_data.add_trade(trade);
+        } else {
+            let new_trade_data = MarketTradeData {
+                meta: MarketTradeDataMeta::new(&trade.symbol),
+                trades: vec![trade],
+            };
+            self.all_trades
+                .insert(trade_key.to_string(), new_trade_data);
+        }
 
         // TODO: implement update market volume
     }
@@ -563,7 +577,7 @@ impl MarketData {
     /// # Returns
     ///
     /// Returns an Option<KlineData> containing the requested kline data, or None if no data is available.
-    pub fn kline_data(
+    pub async fn kline_data(
         &mut self,
         symbol: &str,
         interval: &str,
@@ -580,7 +594,8 @@ impl MarketData {
 
         let mut filtered_klines = self
             .storage_manager
-            .get_klines(symbol, interval, from_ts, to_ts);
+            .get_klines(symbol, interval, from_ts, to_ts)
+            .await;
         filtered_klines.extend_from_slice(&in_mem_kline);
 
         // filtered by from_ts and to_ts
@@ -637,12 +652,12 @@ impl MarketData {
     }
 
     // TODO: docs
-    pub fn trade_data(
+    pub async fn trade_data(
         &self,
         symbol: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
-        limit: Option<usize>,
+        _limit: Option<usize>,
     ) -> Option<MarketTradeData> {
         let trade_key = build_market_trade_key(symbol);
 
@@ -651,7 +666,10 @@ impl MarketData {
             None => vec![],
         };
 
-        let mut filtered_trades = self.storage_manager.get_trades(symbol, from_ts, to_ts);
+        let mut filtered_trades = self
+            .storage_manager
+            .get_trades(symbol, from_ts, to_ts)
+            .await;
         filtered_trades.extend_from_slice(&in_mem_trades);
 
         // filtered by from_ts and to_ts
@@ -685,7 +703,7 @@ impl MarketData {
     // Private methods
     // ---
 
-    fn handle_data_backup(&mut self, clear_memory: bool) {
+    async fn handle_data_backup(&mut self, clear_memory: bool) {
         let time_delta = self.last_backup + Duration::from_secs(BACKUP_INTERVAL_SECS);
 
         if time_delta < SystemTime::now() {
@@ -693,6 +711,7 @@ impl MarketData {
             for (key, kline_data) in self.all_klines.iter_mut() {
                 self.storage_manager
                     .save_klines(&kline_data.klines, key)
+                    .await
                     .expect("Unable to save Klines");
 
                 if clear_memory {
@@ -704,6 +723,7 @@ impl MarketData {
             for (key, trade_data) in self.all_trades.iter_mut() {
                 self.storage_manager
                     .save_trades(&trade_data.trades, key)
+                    .await
                     .expect("Unable to save Klines");
 
                 if clear_memory {

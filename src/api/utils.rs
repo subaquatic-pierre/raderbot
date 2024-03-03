@@ -87,7 +87,7 @@ async fn load_klines(
 
             let klines = load_binance_klines(entry.path(), &symbol, &interval);
 
-            if let Err(e) = storage_manager.save_klines(&klines, &kline_key) {
+            if let Err(e) = storage_manager.save_klines(&klines, &kline_key).await {
                 info!("Unable to save klines: {e}");
             }
         }
@@ -130,9 +130,12 @@ async fn bootstrap_historical_trades(
             let symbol: String = file_name.split("-").collect::<Vec<&str>>()[0].to_string();
 
             let agg_trades = load_binance_agg_trades(entry.path(), &symbol);
+
+            info!("Aggregate trade length: {}", agg_trades.len());
+
             let trade_key = build_market_trade_key(&symbol);
 
-            if let Err(e) = storage_manager.save_trades(&agg_trades, &trade_key) {
+            if let Err(e) = storage_manager.save_trades(&agg_trades, &trade_key).await {
                 info!("Unable to save trades: {e}");
             }
         }

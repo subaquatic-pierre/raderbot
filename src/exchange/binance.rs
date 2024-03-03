@@ -430,30 +430,20 @@ impl ExchangeApi for BinanceApi {
 
         // TODO: Handle error from Json values gracefully
 
-        let price_change = parse_f64_from_value("priceChange", &data)?;
-        let percent_change = parse_f64_from_value("priceChangePercent", &data)?;
         let high = parse_f64_from_value("highPrice", &data)?;
         let low = parse_f64_from_value("lowPrice", &data)?;
         let traded_vol = parse_f64_from_value("volume", &data)?;
-        let quote_vol = parse_f64_from_value("quoteVolume", &data)?;
         let last_price = parse_f64_from_value("lastPrice", &data)?;
         let open_price = parse_f64_from_value("openPrice", &data)?;
-        let open_time = parse_usize_from_value("openTime", &data).unwrap() as u64;
-        let close_time = parse_usize_from_value("closeTime", &data).unwrap() as u64;
 
         let ticker = Ticker {
             time: generate_ts(),
             symbol: symbol.to_string(),
-            price_change,
-            percent_change,
             high,
             low,
             traded_vol,
-            quote_vol,
             last_price,
             open_price,
-            open_time,
-            close_time,
         };
 
         Ok(ticker)

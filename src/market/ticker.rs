@@ -100,16 +100,11 @@ impl TickerData {
 pub struct Ticker {
     pub time: u64,
     pub symbol: String,
-    pub price_change: f64,
-    pub percent_change: f64,
     pub high: f64,
     pub low: f64,
     pub traded_vol: f64,
-    pub quote_vol: f64,
     pub last_price: f64,
     pub open_price: f64,
-    pub open_time: u64,
-    pub close_time: u64,
 }
 
 impl Ticker {
@@ -207,15 +202,10 @@ impl Ticker {
             time,
             symbol: symbol.to_string(),
             last_price,
-            price_change,
-            percent_change,
             open_price,
             high,
             low,
             traded_vol,
-            quote_vol,
-            open_time,
-            close_time,
         })
     }
 
@@ -292,15 +282,10 @@ impl Ticker {
             time,
             symbol: symbol.to_string(),
             last_price,
-            price_change,
-            percent_change,
             open_price,
             high,
             low,
             traded_vol,
-            quote_vol,
-            open_time,
-            close_time,
         })
     }
 }
@@ -315,16 +300,11 @@ impl Default for Ticker {
         Self {
             time: 42,
             symbol: "BTCUSDT".to_string(),
-            price_change: 42.2,
-            percent_change: 42.2,
             last_price: price,
             open_price: 42.2,
             high: 42.2,
             low: 42.2,
             traded_vol: 42.2,
-            quote_vol: 42.2,
-            open_time: 42,
-            close_time: 42,
         }
     }
 }

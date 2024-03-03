@@ -1,3 +1,5 @@
+#[doc(hidden)]
+pub mod bson;
 pub mod channel;
 pub mod crypt;
 pub mod csv;

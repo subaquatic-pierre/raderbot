@@ -183,3 +183,15 @@ Identifies securities moving in one direction with high volume and continues to 
 ### Pattern Recognition:
 
 This involves identifying patterns within the price charts (like head and shoulders, triangles, flags, etc.) that can indicate potential bullish or bearish movements.
+
+use admin
+db.createUser(
+{
+user: "rootuser",
+pwd: "rootpass",
+roles: [ { role: "userAdminAnyDatabase", db: "admin" } ]
+}
+)
+
+150000000
+103393842

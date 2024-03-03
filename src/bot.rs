@@ -1,5 +1,6 @@
 use dotenv_codegen::dotenv;
 
+use log::info;
 use serde_json::Value;
 
 use std::{collections::HashMap, sync::Arc};
@@ -12,7 +13,7 @@ use crate::{
         messages::MarketMessage,
         types::{ArcMutex, ArcReceiver, ArcSender},
     },
-    storage::{fs::FsStorageManager, manager::StorageManager},
+    storage::{db::DbStorageManager, fs::FsStorageManager, manager::StorageManager},
     strategy::{
         backer::BackTest,
         signal::SignalManager,
@@ -40,6 +41,7 @@ impl RaderBot {
         let api_key = dotenv!("BINGX_API_KEY");
         let secret_key = dotenv!("BINGX_SECRET_KEY");
         let dry_run = dotenv!("DRY_RUN");
+        let mongo_uri = dotenv!("MONGO_URI");
 
         // create new channel for stream handler and market to communicate
         let (market_tx, market_rx) = build_arc_channel::<MarketMessage>();
@@ -58,7 +60,13 @@ impl RaderBot {
 
         // create new storage manager
         let storage_manager: Arc<Box<dyn StorageManager>> =
-            Arc::new(Box::new(FsStorageManager::default()));
+            match DbStorageManager::new(mongo_uri).await {
+                Ok(manager) => Arc::new(Box::new(manager)),
+                Err(e) => {
+                    info!("There was an error instantiating MongoDB: {e}");
+                    Arc::new(Box::new(FsStorageManager::default()))
+                }
+            };
 
         // create new market to hold market data
         let market = Market::new(
@@ -158,6 +166,7 @@ impl RaderBot {
             // Save summary
             self.storage_manager
                 .save_strategy_summary(_summary.clone())
+                .await
                 .ok();
 
             summary = Some(_summary);
@@ -175,15 +184,18 @@ impl RaderBot {
         strategy_manger.list_ids()
     }
 
-    pub fn list_historical_strategies(&mut self) -> Option<Vec<StrategyInfo>> {
-        self.storage_manager.list_saved_strategies().ok()
+    pub async fn list_historical_strategies(&mut self) -> Option<Vec<StrategyInfo>> {
+        self.storage_manager.list_saved_strategies().await.ok()
     }
 
-    pub fn get_historical_strategy_summary(
+    pub async fn get_historical_strategy_summary(
         &mut self,
         strategy_id: StrategyId,
     ) -> Option<StrategySummary> {
-        self.storage_manager.get_strategy_summary(strategy_id).ok()
+        self.storage_manager
+            .get_strategy_summary(strategy_id)
+            .await
+            .ok()
     }
 
     pub async fn run_back_test(

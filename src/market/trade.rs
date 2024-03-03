@@ -2,11 +2,15 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use uuid::Uuid;
 
 use crate::{
     account::trade::OrderSide,
     exchange::types::ApiResult,
-    utils::{number::parse_f64_from_lookup, time::generate_ts},
+    utils::{
+        number::parse_f64_from_lookup,
+        time::{floor_mili_ts, generate_ts, SEC_AS_MILI},
+    },
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -40,28 +44,20 @@ impl MarketTradeData {
         }
     }
 
-    pub fn add_trade(&mut self, trade: MarketTrade) -> bool {
+    pub fn add_trade(&mut self, trade: MarketTrade) {
         // get last trade
         if let Some(last) = self.trades.last() {
-            // if last trade exists
-            // replace with latest if trade exists with same open time
+            let last_dx = self.trades.len() - 1;
+            // replace with latest if trade exists with same id
             if trade.id == last.id {
-                let last_dx = self.trades.len() - 1;
                 let _ = std::mem::replace(&mut self.trades[last_dx], trade);
-
-                false
             } else {
-                // add trade to end if open_time is not the same
                 self.trades.push(trade);
                 self.meta.len += 1;
-                true
             }
         } else {
             // no trades in data, add new trade
             self.trades.push(trade);
-            self.meta.len += 1;
-
-            true
         }
     }
 
@@ -71,9 +67,11 @@ impl MarketTradeData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+pub type MarketTradeId = Uuid;
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MarketTrade {
-    pub id: u64,
+    pub id: MarketTradeId,
     pub symbol: String,
     pub timestamp: u64,
     pub qty: f64,
@@ -154,7 +152,7 @@ impl MarketTrade {
         let symbol = symbol.replace("USDT", "-USDT");
 
         Ok(Self {
-            id,
+            id: Uuid::new_v4(),
             symbol: symbol.to_string(),
             timestamp: trade_time,
             qty,
@@ -167,7 +165,7 @@ impl MarketTrade {
 impl Default for MarketTrade {
     fn default() -> Self {
         Self {
-            id: 1,
+            id: Uuid::new_v4(),
             symbol: "default".to_string(),
             timestamp: generate_ts(),
             qty: 42.2,

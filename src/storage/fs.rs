@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use csv::ReaderBuilder;
 use directories::UserDirs;
 use log::info;
@@ -218,6 +219,7 @@ impl Default for FsStorageManager {
     }
 }
 
+#[async_trait]
 impl StorageManager for FsStorageManager {
     /// Saves klines to the file system.
     ///
@@ -230,7 +232,7 @@ impl StorageManager for FsStorageManager {
     ///
     /// Returns an `io::Result<()>` indicating the outcome of the operation.
 
-    fn save_klines(&self, klines: &[Kline], kline_key: &str) -> io::Result<()> {
+    async fn save_klines(&self, klines: &[Kline], kline_key: &str) -> io::Result<()> {
         // Build market directory and subdirectory for klines
         let mut market_dir = self.data_directory.join("market");
         market_dir.push("klines");
@@ -307,7 +309,7 @@ impl StorageManager for FsStorageManager {
     ///
     /// Returns a vector of `Kline` that match the criteria.
 
-    fn get_klines(
+    async fn get_klines(
         &self,
         symbol: &str,
         interval: &str,
@@ -354,7 +356,7 @@ impl StorageManager for FsStorageManager {
     ///
     /// Returns a `Result` indicating the outcome of the operation.
 
-    fn save_strategy_summary(&self, summary: StrategySummary) -> Result<(), Box<dyn Error>> {
+    async fn save_strategy_summary(&self, summary: StrategySummary) -> Result<(), Box<dyn Error>> {
         let filepath = self.strategy_summary_filepath(summary.info.id)?;
         let json_str = serde_json::to_string(&summary)?;
 
@@ -371,7 +373,7 @@ impl StorageManager for FsStorageManager {
     ///
     /// Returns a `Result` containing a vector of `StrategyInfo` if successful, or an error if not.
 
-    fn list_saved_strategies(&self) -> Result<Vec<StrategyInfo>, Box<dyn Error>> {
+    async fn list_saved_strategies(&self) -> Result<Vec<StrategyInfo>, Box<dyn Error>> {
         let mut data = vec![];
 
         let data_dir = self.data_directory.join("strategies");
@@ -404,7 +406,7 @@ impl StorageManager for FsStorageManager {
     ///
     /// Returns a `Result` containing the `StrategySummary` if found, or an error if not.
 
-    fn get_strategy_summary(
+    async fn get_strategy_summary(
         &self,
         strategy_id: StrategyId,
     ) -> Result<StrategySummary, Box<dyn Error>> {
@@ -422,7 +424,7 @@ impl StorageManager for FsStorageManager {
     }
 
     // TODO: Docs
-    fn get_trades(
+    async fn get_trades(
         &self,
         symbol: &str,
         from_ts: Option<u64>,
@@ -459,7 +461,7 @@ impl StorageManager for FsStorageManager {
     }
 
     // TODO: docs
-    fn save_trades(&self, trades: &[MarketTrade], trade_key: &str) -> io::Result<()> {
+    async fn save_trades(&self, trades: &[MarketTrade], trade_key: &str) -> io::Result<()> {
         // Build market directory and subdirectory for klines
         let mut market_dir = self.data_directory.join("market");
         market_dir.push("trades");

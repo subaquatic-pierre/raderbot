@@ -12,7 +12,7 @@ use uuid::Uuid;
 pub type PositionId = Uuid;
 
 /// Enum representing the side of an order (Buy or Sell).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Copy)]
 pub enum OrderSide {
     /// Represents a Buy order side.
     Buy,

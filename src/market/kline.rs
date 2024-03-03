@@ -1,4 +1,8 @@
-use serde::{Deserialize, Serialize};
+use mongodb::{
+    bson::{self, doc, to_document},
+    IndexModel,
+};
+use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -102,7 +106,7 @@ impl KlineData {
 ///
 /// This struct is the fundamental data structure for representing a single kline or candlestick in market data.
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Kline {
     pub symbol: String,
     pub interval: String,
