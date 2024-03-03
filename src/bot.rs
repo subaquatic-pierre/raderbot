@@ -59,6 +59,8 @@ impl RaderBot {
         // )));
 
         // create new storage manager
+        // let storage_manager: Arc<Box<dyn StorageManager>> =
+        //     Arc::new(Box::new(FsStorageManager::default()));
         let storage_manager: Arc<Box<dyn StorageManager>> =
             match DbStorageManager::new(mongo_uri).await {
                 Ok(manager) => Arc::new(Box::new(manager)),

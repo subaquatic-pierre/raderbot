@@ -1,9 +1,9 @@
 use chrono::Datelike;
 use log::info;
 use serde::Deserialize;
-use uuid::Uuid;
-
+use std::collections::BTreeMap;
 use std::{collections::HashMap, fs::File, time::SystemTime};
+use uuid::Uuid;
 
 use crate::{
     account::trade::OrderSide,
@@ -103,25 +103,20 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
 }
 
 fn aggregate_all_trades(trades: &mut Vec<MarketTrade>) {
-    let mut aggregated_trades_map: HashMap<(u64, OrderSide), MarketTrade> = HashMap::new();
+    let mut aggregated_trades_map: BTreeMap<(u64, OrderSide), MarketTrade> = BTreeMap::new();
 
-    for trade in trades.drain(..) {
+    for mut trade in trades.drain(..) {
         let floored_ts = floor_mili_ts(trade.timestamp, SEC_AS_MILI); // Floor to nearest second
         let key = (floored_ts, trade.order_side);
 
-        let aggregated_trade = aggregated_trades_map
-            .entry(key)
-            .or_insert_with(|| MarketTrade {
-                id: trade.id,
-                symbol: trade.symbol.clone(),
-                timestamp: floored_ts,
-                qty: 0.0,   // Initialize with 0, will be updated below
-                price: 0.0, // Initialize with 0, to be calculated
-                order_side: trade.order_side,
-            });
-
-        aggregated_trade.qty += trade.qty;
-        aggregated_trade.price = (aggregated_trade.price + trade.price) / 2.0;
+        if let Some(existing_trade) = aggregated_trades_map.get_mut(&key) {
+            existing_trade.qty += trade.qty;
+            existing_trade.price = (existing_trade.price + trade.price) / 2.0;
+        } else {
+            // update timestamp to be floored to second
+            trade.timestamp = floored_ts;
+            aggregated_trades_map.insert(key, trade);
+        }
     }
 
     // Extract the aggregated trades and replace the original vector

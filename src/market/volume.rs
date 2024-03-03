@@ -7,8 +7,9 @@ use crate::{
 };
 
 use super::trade::{MarketTrade, MarketTradeData};
+use log::info;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Serialize)]
 pub struct MarketTradeVolume {
@@ -35,8 +36,8 @@ impl MarketTradeVolume {
 
         if trades.is_empty() || price_granularity == 0 {
             return BucketedVolumeData {
-                volume_by_price_bucket: HashMap::new(),
-                volume_by_time_bucket: HashMap::new(),
+                volume_by_price_bucket: BTreeMap::new(),
+                volume_by_time_bucket: BTreeMap::new(),
                 start_time,
                 end_time,
                 total_buy_volume: 0.0,
@@ -73,25 +74,27 @@ impl MarketTradeVolume {
         }
     }
 
-    pub fn get_poc(&self, volume_by_price_bucket: &HashMap<String, BucketVolume>) -> f64 {
-        let mut max_vol = "0".to_string();
+    pub fn get_poc(&self, volume_by_price_bucket: &BTreeMap<String, BucketVolume>) -> f64 {
+        let mut max_vol = 0.0;
+        let mut poc_key = "0".to_string();
         for (key, bucket) in volume_by_price_bucket {
             let bucket_total = bucket.buy_volume + bucket.sell_volume;
-            if bucket_total > max_vol.parse::<f64>().unwrap() {
-                max_vol = key.to_string();
+            if bucket_total > max_vol {
+                max_vol = bucket_total;
+                poc_key = key.to_string();
             }
         }
         // calculate bucket with greatest volume
         // return the key
-        max_vol.parse::<f64>().unwrap()
+        poc_key.parse::<f64>().unwrap()
     }
 
     pub fn calc_price_buckets(
         &self,
         trades: &[MarketTrade],
         price_granularity: usize,
-    ) -> HashMap<String, BucketVolume> {
-        let mut volume_by_price_bucket = HashMap::new();
+    ) -> BTreeMap<String, BucketVolume> {
+        let mut volume_by_price_bucket = BTreeMap::new();
 
         let (min_price, max_price) = self.calc_min_max(trades);
         let price_range = max_price - min_price;
@@ -111,6 +114,7 @@ impl MarketTradeVolume {
                 volume_entry.sell_volume += trade.qty;
             }
         }
+
         volume_by_price_bucket
     }
 
@@ -118,8 +122,8 @@ impl MarketTradeVolume {
         &self,
         trades: &[MarketTrade],
         time_interval: &str,
-    ) -> HashMap<String, BucketVolume> {
-        let mut volume_by_time_bucket = HashMap::new();
+    ) -> BTreeMap<String, BucketVolume> {
+        let mut volume_by_time_bucket = BTreeMap::new();
 
         for trade in trades {
             let timestamp = match time_interval {
@@ -173,7 +177,7 @@ impl MarketTradeVolume {
         (start_time, end_time)
     }
 
-    pub fn calc_total_vol(&self, bucketed_vols: &HashMap<String, BucketVolume>) -> BucketVolume {
+    pub fn calc_total_vol(&self, bucketed_vols: &BTreeMap<String, BucketVolume>) -> BucketVolume {
         let mut total_buy_volume = 0.0;
         let mut total_sell_volume = 0.0;
 
@@ -189,17 +193,17 @@ impl MarketTradeVolume {
     }
 }
 
-#[derive(Serialize, Default, Clone)]
+#[derive(Serialize, Default, Clone, Debug)]
 pub struct BucketVolume {
     pub buy_volume: f64,
     pub sell_volume: f64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct BucketedVolumeData {
     // Using HashMap to map bucket keys to volumes
-    pub volume_by_price_bucket: HashMap<String, BucketVolume>,
-    pub volume_by_time_bucket: HashMap<String, BucketVolume>,
+    pub volume_by_price_bucket: BTreeMap<String, BucketVolume>,
+    pub volume_by_time_bucket: BTreeMap<String, BucketVolume>,
     pub start_time: String,
     pub end_time: String,
     pub total_sell_volume: f64,

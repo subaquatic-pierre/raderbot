@@ -48,3 +48,8 @@ mongodb = "2.0"
 
 [dev-dependencies]
 cargo-watch = "7.7.1"
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = true # Enables Link Time Optimization for further optimization

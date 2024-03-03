@@ -8,7 +8,7 @@ build:
 	cp ./target/release/raderbot .
 	chmod +x ./raderbot
 
-watch:
+dev:
 	cargo watch -x "run"
 
 fix:
