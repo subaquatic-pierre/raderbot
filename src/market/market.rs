@@ -4,6 +4,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
 use std::{collections::HashMap, sync::Arc};
 
@@ -13,6 +14,7 @@ use crate::exchange::api::ExchangeInfo;
 use crate::exchange::stream::build_stream_id;
 use crate::exchange::types::{ApiResult, StreamType};
 use crate::utils::kline::{build_kline_key, build_ticker_key};
+use crate::utils::time::{floor_mili_ts, SEC_AS_MILI};
 use crate::utils::trade::build_market_trade_key;
 use crate::{
     exchange::{
@@ -326,8 +328,12 @@ impl Market {
                     MarketMessage::UpdateTicker(ticker) => {
                         market_data.lock().await.update_ticker(ticker);
                     }
-                    MarketMessage::UpdateMarketTrade(trade) => {
-                        market_data.lock().await.update_market_trade(trade).await;
+                    MarketMessage::UpdateMarketTrade(mut trade) => {
+                        market_data
+                            .lock()
+                            .await
+                            .update_market_trade(&mut trade)
+                            .await;
                     }
                 }
             }
@@ -546,16 +552,21 @@ impl MarketData {
     }
 
     // TODO: write docs
-    pub async fn update_market_trade(&mut self, trade: MarketTrade) {
+    pub async fn update_market_trade(&mut self, trade: &mut MarketTrade) {
         let trade_key = build_market_trade_key(&trade.symbol);
         info!("Update market trade, inside Market, {trade:?}");
 
         if let Some(trade_data) = self.all_trades.get_mut(&trade_key) {
             trade_data.add_trade(trade);
         } else {
+            trade.timestamp = floor_mili_ts(trade.timestamp, SEC_AS_MILI);
+            let mut trades = BTreeMap::new();
+            let key = (trade.timestamp, trade.order_side);
+            trades.insert(key, trade.clone());
+
             let new_trade_data = MarketTradeData {
                 meta: MarketTradeDataMeta::new(&trade.symbol),
-                trades: vec![trade],
+                trades,
             };
             self.all_trades
                 .insert(trade_key.to_string(), new_trade_data);
@@ -662,7 +673,7 @@ impl MarketData {
         let trade_key = build_market_trade_key(symbol);
 
         let in_mem_trades = match self.all_trades.get(&trade_key) {
-            Some(kline_data) => kline_data.trades.clone(),
+            Some(trade_data) => trade_data.get_trades(),
             None => vec![],
         };
 
@@ -682,6 +693,12 @@ impl MarketData {
 
         filtered_trades.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
 
+        let mut trades = BTreeMap::new();
+        filtered_trades.iter().for_each(|t| {
+            let key = (t.timestamp, t.order_side);
+            trades.insert(key, t.clone());
+        });
+
         // Create a new KlineData object to hold the filtered klines
         let filtered_trade_data = MarketTradeData {
             meta: MarketTradeDataMeta {
@@ -689,7 +706,7 @@ impl MarketData {
                 len: filtered_trades.len() as u64,
                 last_update: generate_ts(),
             },
-            trades: filtered_trades,
+            trades,
         };
 
         if filtered_trade_data.meta.len == 0 {
@@ -722,7 +739,7 @@ impl MarketData {
             // Clear tickers from ticker_data
             for (key, trade_data) in self.all_trades.iter_mut() {
                 self.storage_manager
-                    .save_trades(&trade_data.trades, key)
+                    .save_trades(&trade_data.get_trades(), key)
                     .await
                     .expect("Unable to save Klines");
 

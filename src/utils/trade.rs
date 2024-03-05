@@ -33,7 +33,7 @@ struct BinanceAggTradeCsvRow {
 }
 
 pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> Vec<MarketTrade> {
-    let mut all_trades = vec![];
+    let mut aggregated_trades_map: BTreeMap<(u64, OrderSide), MarketTrade> = BTreeMap::new();
     let filepath_str = file_path.as_os_str().to_str().unwrap();
     info!("Loading Aggregate Trade Data from file: {filepath_str}");
 
@@ -79,27 +79,25 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
 
             let market_trade = MarketTrade {
                 id: Uuid::new_v4(),
-                timestamp: row.transact_time,
+                timestamp: floor_mili_ts(row.transact_time, SEC_AS_MILI),
                 price: row.price,
                 symbol: symbol.to_string(),
                 qty: row.quantity,
                 order_side,
             };
 
-            all_trades.push(market_trade)
+            let key = (market_trade.timestamp, market_trade.order_side);
+
+            if let Some(existing_trade) = aggregated_trades_map.get_mut(&key) {
+                existing_trade.qty += market_trade.qty;
+                existing_trade.price = (existing_trade.price + market_trade.price) / 2.0;
+            } else {
+                aggregated_trades_map.insert(key, market_trade);
+            }
         }
     }
 
-    info!("all_trades length before aggregation: {}", all_trades.len());
-
-    aggregate_all_trades(&mut all_trades);
-
-    info!(
-        "all_trades length after aggregation length: {}",
-        all_trades.len()
-    );
-
-    all_trades
+    aggregated_trades_map.into_values().collect()
 }
 
 fn aggregate_all_trades(trades: &mut Vec<MarketTrade>) {

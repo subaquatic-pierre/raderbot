@@ -28,13 +28,13 @@ use super::manager::StorageManager;
 /// Represents a file system-based storage manager for managing klines and strategy summaries.
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct FsStorageManager {
+pub struct FsStorage {
     app_directory: PathBuf,
     data_directory: PathBuf,
 }
 
-impl FsStorageManager {
-    /// Creates a new instance of `FsStorageManager` with a specified data directory.
+impl FsStorage {
+    /// Creates a new instance of `FsStorage` with a specified data directory.
     ///
     /// # Arguments
     ///
@@ -202,7 +202,7 @@ impl FsStorageManager {
     }
 }
 
-impl Default for FsStorageManager {
+impl Default for FsStorage {
     fn default() -> Self {
         // Create the default data directory path
         let app_directory = Self::create_app_directory();
@@ -220,7 +220,7 @@ impl Default for FsStorageManager {
 }
 
 #[async_trait]
-impl StorageManager for FsStorageManager {
+impl StorageManager for FsStorage {
     /// Saves klines to the file system.
     ///
     /// # Arguments

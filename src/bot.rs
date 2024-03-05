@@ -13,7 +13,9 @@ use crate::{
         messages::MarketMessage,
         types::{ArcMutex, ArcReceiver, ArcSender},
     },
-    storage::{db::DbStorageManager, fs::FsStorageManager, manager::StorageManager},
+    storage::{
+        fs::FsStorage, influx::InfluxStorage, manager::StorageManager, mongo::MongoDbStorage,
+    },
     strategy::{
         backer::BackTest,
         signal::SignalManager,
@@ -42,6 +44,9 @@ impl RaderBot {
         let secret_key = dotenv!("BINGX_SECRET_KEY");
         let dry_run = dotenv!("DRY_RUN");
         let mongo_uri = dotenv!("MONGO_URI");
+        let influx_uri = dotenv!("INFLUX_DB_HOST");
+        let influx_token = dotenv!("INFLUX_TOKEN");
+        let storage_type = dotenv!("STORAGE_TYPE");
 
         // create new channel for stream handler and market to communicate
         let (market_tx, market_rx) = build_arc_channel::<MarketMessage>();
@@ -60,15 +65,32 @@ impl RaderBot {
 
         // create new storage manager
         // let storage_manager: Arc<Box<dyn StorageManager>> =
-        //     Arc::new(Box::new(FsStorageManager::default()));
-        let storage_manager: Arc<Box<dyn StorageManager>> =
-            match DbStorageManager::new(mongo_uri).await {
-                Ok(manager) => Arc::new(Box::new(manager)),
-                Err(e) => {
-                    info!("There was an error instantiating MongoDB: {e}");
-                    Arc::new(Box::new(FsStorageManager::default()))
-                }
-            };
+        //     Arc::new(Box::new(FsStorage::default()));
+        let storage_manager: Arc<Box<dyn StorageManager>> = match storage_type {
+            "INFLUX" => {
+                let manager: Arc<Box<dyn StorageManager>> =
+                    match InfluxStorage::new(influx_uri, influx_token).await {
+                        Ok(manager) => Arc::new(Box::new(manager)),
+                        Err(e) => {
+                            info!("There was an error instantiating InfluxDB: {e}");
+                            Arc::new(Box::new(FsStorage::default()))
+                        }
+                    };
+                manager
+            }
+            "MONGO" => {
+                let manager: Arc<Box<dyn StorageManager>> =
+                    match MongoDbStorage::new(mongo_uri).await {
+                        Ok(manager) => Arc::new(Box::new(manager)),
+                        Err(e) => {
+                            info!("There was an error instantiating MongoDB: {e}");
+                            Arc::new(Box::new(FsStorage::default()))
+                        }
+                    };
+                manager
+            }
+            _ => Arc::new(Box::new(FsStorage::default())),
+        };
 
         // create new market to hold market data
         let market = Market::new(

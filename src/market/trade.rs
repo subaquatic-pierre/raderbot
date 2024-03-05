@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -33,36 +33,36 @@ impl MarketTradeDataMeta {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MarketTradeData {
     pub meta: MarketTradeDataMeta,
-    pub trades: Vec<MarketTrade>,
+    pub trades: BTreeMap<(u64, OrderSide), MarketTrade>,
 }
 
 impl MarketTradeData {
     pub fn new(symbol: &str) -> Self {
         Self {
             meta: MarketTradeDataMeta::new(symbol),
-            trades: vec![],
+            trades: BTreeMap::new(),
         }
     }
 
-    pub fn add_trade(&mut self, trade: MarketTrade) {
-        // get last trade
-        if let Some(last) = self.trades.last() {
-            let last_dx = self.trades.len() - 1;
-            // replace with latest if trade exists with same id
-            if trade.id == last.id {
-                let _ = std::mem::replace(&mut self.trades[last_dx], trade);
-            } else {
-                self.trades.push(trade);
-                self.meta.len += 1;
-            }
+    pub fn add_trade(&mut self, trade: &mut MarketTrade) {
+        // ensure trade timestamp is floored to second
+        trade.timestamp = floor_mili_ts(trade.timestamp, SEC_AS_MILI);
+        let key = (trade.timestamp, trade.order_side);
+
+        if let Some(existing_trade) = self.trades.get_mut(&key) {
+            existing_trade.qty += trade.qty;
+            existing_trade.price = (existing_trade.price + trade.price) / 2.0;
         } else {
-            // no trades in data, add new trade
-            self.trades.push(trade);
+            self.trades.insert(key, trade.clone());
         }
+    }
+
+    pub fn get_trades(&self) -> Vec<MarketTrade> {
+        self.trades.values().cloned().collect()
     }
 
     pub fn clear_trades(&mut self) {
-        self.trades = vec![];
+        self.trades = BTreeMap::new();
         self.meta.len = 0;
     }
 }

@@ -1,11 +1,25 @@
 version: "3.8"
 services:
-  mongodb:
-    image: mongo:latest
+  # mongodb:
+  #   image: mongo:latest
+  #   volumes:
+  #     - ./db:/data/db
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: rootuser
+  #     MONGO_INITDB_ROOT_PASSWORD: rootpass
+
+  influxdb:
+    image: influxdb:2.7
     volumes:
-      - ./db:/data/db
+      - ./db:/var/lib/influxdb2
     ports:
-      - "27017:27017"
+      - "8086:8086"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: rootuser
-      MONGO_INITDB_ROOT_PASSWORD: rootpass
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=myuser
+      - DOCKER_INFLUXDB_INIT_PASSWORD=mypassword
+      - DOCKER_INFLUXDB_INIT_ORG=raderbot
+      - DOCKER_INFLUXDB_INIT_BUCKET=trade_data
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=myadmintoken
