@@ -9,6 +9,7 @@ use reqwest::{Client, Response};
 use futures_util::StreamExt;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -396,6 +397,7 @@ impl ExchangeApi for BinanceApi {
         let close_time = arr[0][6].as_u64().unwrap();
 
         Ok(Kline {
+            id: Uuid::new_v4(),
             interval: interval.to_string(),
             symbol: symbol.to_string(),
             open_time,

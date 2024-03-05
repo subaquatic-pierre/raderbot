@@ -64,8 +64,7 @@ impl RaderBot {
         // )));
 
         // create new storage manager
-        // let storage_manager: Arc<Box<dyn StorageManager>> =
-        //     Arc::new(Box::new(FsStorage::default()));
+
         let storage_manager: Arc<Box<dyn StorageManager>> = match storage_type {
             "INFLUX" => {
                 let manager: Arc<Box<dyn StorageManager>> =

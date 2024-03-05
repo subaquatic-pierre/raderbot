@@ -85,7 +85,12 @@ impl StorageManager for InfluxStorage {
         unimplemented!()
     }
 
-    async fn save_klines(&self, klines: &[Kline], kline_key: &str) -> io::Result<()> {
+    async fn save_klines(
+        &self,
+        klines: &[Kline],
+        kline_key: &str,
+        is_bootstrap: bool,
+    ) -> io::Result<()> {
         let query =
             "q=SELECT used_percent FROM example-db.example-rp.example-measurement WHERE host=host1";
         unimplemented!()

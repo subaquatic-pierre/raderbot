@@ -87,7 +87,7 @@ async fn load_klines(
 
             let klines = load_binance_klines(entry.path(), &symbol, &interval);
 
-            if let Err(e) = storage_manager.save_klines(&klines, &kline_key).await {
+            if let Err(e) = storage_manager.save_klines(&klines, &kline_key, true).await {
                 info!("Unable to save klines: {e}");
             }
         }

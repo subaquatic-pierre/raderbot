@@ -158,22 +158,29 @@ impl StorageManager for MongoDbStorage {
         vec![]
     }
 
-    async fn save_klines(&self, klines: &[Kline], kline_key: &str) -> io::Result<()> {
+    async fn save_klines(
+        &self,
+        klines: &[Kline],
+        kline_key: &str,
+        is_bootstrap: bool,
+    ) -> io::Result<()> {
         let collection = self
             .kline_collection(kline_key)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-        // delete all existing klines with open_times
-        let open_times: Vec<bson::DateTime> = klines
-            .iter()
-            .map(|k| bson::DateTime::from_millis(k.open_time as i64))
-            .collect();
+        if is_bootstrap {
+            // delete all existing klines with open_times
+            let ids: Vec<bson::Uuid> = klines
+                .iter()
+                .map(|k| bson::Uuid::from_bytes(k.id.into_bytes()))
+                .collect();
 
-        let query = doc! {"id": open_times};
-        if let Err(e) = collection.delete_many(query, None).await {
-            info!("{e}")
-        };
+            let query = doc! {"id": {"$in": ids}};
+            if let Err(e) = collection.delete_many(query, None).await {
+                info!("{e}")
+            };
+        }
 
         let bson_klines: Vec<BsonKline> = klines.iter().map(|k| k.clone().into()).collect();
 
@@ -251,7 +258,7 @@ impl StorageManager for MongoDbStorage {
                 .collect();
 
             let id_len = ids.len();
-            let query = doc! {"id": ids};
+            let query = doc! {"id": {"$in": ids}};
 
             match collection.delete_many(query, None).await {
                 Err(e) => {
@@ -285,7 +292,7 @@ impl StorageManager for MongoDbStorage {
             .collect();
         let id_len = ids.len();
         info!("Deleting remaining IDS if exist: {}", ids.len());
-        let query = doc! {"id": ids};
+        let query = doc! {"id": {"$in": ids}};
 
         match collection.delete_many(query, None).await {
             Err(e) => {
@@ -335,6 +342,7 @@ impl StorageManager for MongoDbStorage {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BsonKline {
+    pub id: BsonUuid,
     pub symbol: String,
     pub interval: String,
     pub open: f64,
@@ -349,6 +357,7 @@ pub struct BsonKline {
 impl From<Kline> for BsonKline {
     fn from(kline: Kline) -> Self {
         BsonKline {
+            id: BsonUuid::new(),
             symbol: kline.symbol,
             interval: kline.interval,
             open: kline.open,
@@ -365,6 +374,7 @@ impl From<Kline> for BsonKline {
 impl From<BsonKline> for Kline {
     fn from(bson_kline: BsonKline) -> Self {
         Kline {
+            id: Uuid::from_bytes(bson_kline.id.bytes()),
             symbol: bson_kline.symbol,
             interval: bson_kline.interval,
             open: bson_kline.open,

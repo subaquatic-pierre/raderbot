@@ -727,7 +727,7 @@ impl MarketData {
             // clear all klines
             for (key, kline_data) in self.all_klines.iter_mut() {
                 self.storage_manager
-                    .save_klines(&kline_data.klines, key)
+                    .save_klines(&kline_data.klines, key, false)
                     .await
                     .expect("Unable to save Klines");
 

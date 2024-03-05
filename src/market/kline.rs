@@ -5,6 +5,7 @@ use mongodb::{
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::{
     exchange::types::ApiResult,
@@ -117,11 +118,13 @@ pub struct Kline {
     pub volume: f64,
     pub open_time: u64,
     pub close_time: u64,
+    pub id: Uuid,
 }
 
 impl Default for Kline {
     fn default() -> Self {
         Self {
+            id: Uuid::new_v4(),
             interval: "UNkown".to_string(),
             symbol: "Unknown".to_string(),
             open_time: 42,
@@ -204,6 +207,7 @@ impl Kline {
         let volume = parse_f64_from_lookup("v", &_kline)?;
 
         Ok(Self {
+            id: Uuid::new_v4(),
             interval: interval.to_string(),
             symbol: symbol.to_string(),
             open_time,
@@ -257,6 +261,7 @@ impl Kline {
         let volume = parse_f64_from_lookup("volume", &data)?;
 
         Ok(Self {
+            id: Uuid::new_v4(),
             interval: interval.to_string(),
             symbol: symbol.to_string(),
             open_time,
@@ -309,6 +314,7 @@ impl Kline {
         let volume = parse_f64_from_lookup("v", &data)?;
 
         Ok(Self {
+            id: Uuid::new_v4(),
             interval,
             symbol: symbol.to_string(),
             open_time,

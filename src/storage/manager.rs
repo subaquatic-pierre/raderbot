@@ -19,7 +19,12 @@ pub trait StorageManager: Send + Sync {
     /// Saves kline data to storage.
     ///
     /// Takes an array of `Kline` objects and a key for identification. Returns an `io::Result<()>` indicating success or failure.
-    async fn save_klines(&self, klines: &[Kline], kline_key: &str) -> io::Result<()>;
+    async fn save_klines(
+        &self,
+        klines: &[Kline],
+        kline_key: &str,
+        is_bootstrap: bool,
+    ) -> io::Result<()>;
 
     /// Retrieves kline data from storage.
     ///

@@ -232,7 +232,12 @@ impl StorageManager for FsStorage {
     ///
     /// Returns an `io::Result<()>` indicating the outcome of the operation.
 
-    async fn save_klines(&self, klines: &[Kline], kline_key: &str) -> io::Result<()> {
+    async fn save_klines(
+        &self,
+        klines: &[Kline],
+        kline_key: &str,
+        is_bootstrap: bool,
+    ) -> io::Result<()> {
         // Build market directory and subdirectory for klines
         let mut market_dir = self.data_directory.join("market");
         market_dir.push("klines");
@@ -277,6 +282,7 @@ impl StorageManager for FsStorage {
             }
 
             let file = OpenOptions::new()
+                .append(!is_bootstrap)
                 .write(true)
                 .create(true)
                 .open(&file_path)?;
