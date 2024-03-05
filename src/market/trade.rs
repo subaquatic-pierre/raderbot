@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
+use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -9,14 +10,14 @@ use crate::{
     exchange::types::ApiResult,
     utils::{
         number::parse_f64_from_lookup,
-        time::{floor_mili_ts, generate_ts, SEC_AS_MILI},
+        time::{floor_mili_ts, generate_ts, timestamp_to_string, SEC_AS_MILI},
     },
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MarketTradeDataMeta {
     pub symbol: String,
-    pub len: u64,
+    pub len: usize,
     pub last_update: u64,
 }
 
@@ -33,7 +34,7 @@ impl MarketTradeDataMeta {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MarketTradeData {
     pub meta: MarketTradeDataMeta,
-    pub trades: BTreeMap<(u64, OrderSide), MarketTrade>,
+    trades: BTreeMap<(u64, OrderSide), MarketTrade>,
 }
 
 impl MarketTradeData {
@@ -45,6 +46,10 @@ impl MarketTradeData {
     }
 
     pub fn add_trade(&mut self, trade: &mut MarketTrade) {
+        // update meta
+        self.meta.last_update = generate_ts();
+        self.meta.len += 1;
+
         // ensure trade timestamp is floored to second
         trade.timestamp = floor_mili_ts(trade.timestamp, SEC_AS_MILI);
         let key = (trade.timestamp, trade.order_side);
@@ -57,13 +62,17 @@ impl MarketTradeData {
         }
     }
 
-    pub fn get_trades(&self) -> Vec<MarketTrade> {
+    pub fn trades(&self) -> Vec<MarketTrade> {
         self.trades.values().cloned().collect()
     }
 
-    pub fn clear_trades(&mut self) {
-        self.trades = BTreeMap::new();
-        self.meta.len = 0;
+    pub fn clear_trades(&mut self, before_ts: u64) {
+        info!(
+            "Removing all trades before {} ...",
+            timestamp_to_string(before_ts)
+        );
+        self.trades.retain(|(ts, _), _v| ts >= &before_ts);
+        self.meta.len = self.trades.len();
     }
 }
 
@@ -148,7 +157,6 @@ impl MarketTrade {
                 // Create an error message or construct an error type
                 "Unable to 'as_str' from 's' key in data kline lookup".to_string()
             })?;
-        let symbol = symbol.replace("USDT", "-USDT");
 
         Ok(Self {
             symbol: symbol.to_string(),

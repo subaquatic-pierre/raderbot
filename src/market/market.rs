@@ -303,8 +303,10 @@ impl Market {
 
     async fn init(&self) {
         // Add initial needed streams
-        // self.add_needed_stream("BTC-USDT", StreamType::Ticker, None)
-        //     .await;
+        self.add_needed_stream("BTCUSDT", StreamType::Ticker, None)
+            .await;
+        self.add_needed_stream("BTCUSDT", StreamType::MarketTrade, None)
+            .await;
 
         self.init_market_receivers().await;
         self.init_active_stream_monitor().await;
@@ -397,9 +399,9 @@ impl Market {
             .exchange_api
             .build_stream_url(symbol, stream_type, interval);
         let stream_id = build_stream_id(symbol, stream_type, interval);
-        let btc_stream_meta = StreamMeta::new(&stream_id, &url, symbol, StreamType::Ticker, None);
+        let stream_meta = StreamMeta::new(&stream_id, &url, symbol, stream_type, None);
 
-        needed_streams.push(btc_stream_meta);
+        needed_streams.push(stream_meta);
     }
 
     /// Removes a specified stream from the list of necessary streams.
@@ -554,23 +556,19 @@ impl MarketData {
     // TODO: write docs
     pub async fn update_market_trade(&mut self, trade: &mut MarketTrade) {
         let trade_key = build_market_trade_key(&trade.symbol);
-        info!("Update market trade, inside Market, {trade:?}");
 
         if let Some(trade_data) = self.all_trades.get_mut(&trade_key) {
             trade_data.add_trade(trade);
         } else {
-            trade.timestamp = floor_mili_ts(trade.timestamp, SEC_AS_MILI);
-            let mut trades = BTreeMap::new();
-            let key = (trade.timestamp, trade.order_side);
-            trades.insert(key, trade.clone());
-
-            let new_trade_data = MarketTradeData {
-                meta: MarketTradeDataMeta::new(&trade.symbol),
-                trades,
-            };
+            // create new MarketTradeData for given symbol
+            let mut new_trade_data = MarketTradeData::new(&trade.symbol);
+            // add new trade
+            new_trade_data.add_trade(trade);
             self.all_trades
                 .insert(trade_key.to_string(), new_trade_data);
         }
+
+        self.handle_data_backup(true).await;
 
         // TODO: implement update market volume
     }
@@ -672,10 +670,20 @@ impl MarketData {
     ) -> Option<MarketTradeData> {
         let trade_key = build_market_trade_key(symbol);
 
+        let mut market_data = MarketTradeData::new(symbol);
+
         let in_mem_trades = match self.all_trades.get(&trade_key) {
-            Some(trade_data) => trade_data.get_trades(),
+            Some(trade_data) => trade_data.trades(),
             None => vec![],
         };
+
+        if from_ts.is_none() && to_ts.is_none() {
+            in_mem_trades
+                .iter()
+                .for_each(|t| market_data.add_trade(&mut t.clone()));
+
+            return Some(market_data);
+        }
 
         let mut filtered_trades = self
             .storage_manager
@@ -693,26 +701,14 @@ impl MarketData {
 
         filtered_trades.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
 
-        let mut trades = BTreeMap::new();
         filtered_trades.iter().for_each(|t| {
-            let key = (t.timestamp, t.order_side);
-            trades.insert(key, t.clone());
+            market_data.add_trade(&mut t.clone());
         });
 
-        // Create a new KlineData object to hold the filtered klines
-        let filtered_trade_data = MarketTradeData {
-            meta: MarketTradeDataMeta {
-                symbol: symbol.to_string(),
-                len: filtered_trades.len() as u64,
-                last_update: generate_ts(),
-            },
-            trades,
-        };
-
-        if filtered_trade_data.meta.len == 0 {
+        if market_data.meta.len == 0 {
             None
         } else {
-            Some(filtered_trade_data)
+            Some(market_data)
         }
     }
 
@@ -736,15 +732,16 @@ impl MarketData {
                 }
             }
 
-            // Clear tickers from ticker_data
+            // Clear trade_data
             for (key, trade_data) in self.all_trades.iter_mut() {
                 self.storage_manager
-                    .save_trades(&trade_data.get_trades(), key, false)
+                    .save_trades(&trade_data.trades(), key, false)
                     .await
                     .expect("Unable to save Klines");
 
                 if clear_memory {
-                    trade_data.clear_trades();
+                    let now = generate_ts();
+                    trade_data.clear_trades(now - (SEC_AS_MILI * BACKUP_INTERVAL_SECS));
                 }
             }
 

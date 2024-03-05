@@ -111,7 +111,7 @@ async fn get_trade_data(
 
     if let Some(trade_data) = trade_data {
         let meta = trade_data.meta.clone();
-        let trades = trade_data.get_trades();
+        let trades = trade_data.trades();
         let json_data = json!({ "trade_data": {"meta": meta, "trades": trades } } );
         HttpResponse::Ok().json(json_data)
     } else {
@@ -165,7 +165,7 @@ async fn get_volume_data(
 
         let market_volume = MarketTradeVolume::new();
         let bucket_volume = market_volume.calc_volume_buckets(
-            &trade_data.get_trades(),
+            &trade_data.trades(),
             body.price_granularity.unwrap_or_else(|| 10),
             &time_interval,
         );

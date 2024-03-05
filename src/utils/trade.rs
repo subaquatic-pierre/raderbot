@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 use std::{collections::HashMap, fs::File, time::SystemTime};
 use uuid::Uuid;
 
+use crate::market::trade::{MarketTradeData, MarketTradeDataMeta};
+use crate::utils::time::generate_ts;
 use crate::{
     account::trade::OrderSide,
     market::{
@@ -64,6 +66,8 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
             .from_reader(file)
     };
 
+    let mut market_data = MarketTradeData::new(symbol);
+
     for result in reader.deserialize::<BinanceAggTradeCsvRow>() {
         if let Err(e) = result {
             info!("{e}")
@@ -77,7 +81,7 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
                 OrderSide::Buy
             };
 
-            let market_trade = MarketTrade {
+            let mut market_trade = MarketTrade {
                 timestamp: floor_mili_ts(row.transact_time, SEC_AS_MILI),
                 price: row.price,
                 symbol: symbol.to_string(),
@@ -85,18 +89,20 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
                 order_side,
             };
 
-            let key = (market_trade.timestamp, market_trade.order_side);
+            market_data.add_trade(&mut market_trade);
 
-            if let Some(existing_trade) = aggregated_trades_map.get_mut(&key) {
-                existing_trade.qty += market_trade.qty;
-                existing_trade.price = (existing_trade.price + market_trade.price) / 2.0;
-            } else {
-                aggregated_trades_map.insert(key, market_trade);
-            }
+            // let key = (market_trade.timestamp, market_trade.order_side);
+
+            // if let Some(existing_trade) = aggregated_trades_map.get_mut(&key) {
+            //     existing_trade.qty += market_trade.qty;
+            //     existing_trade.price = (existing_trade.price + market_trade.price) / 2.0;
+            // } else {
+            //     aggregated_trades_map.insert(key, market_trade);
+            // }
         }
     }
 
-    aggregated_trades_map.into_values().collect()
+    market_data.trades()
 }
 
 fn aggregate_all_trades(trades: &mut Vec<MarketTrade>) {
