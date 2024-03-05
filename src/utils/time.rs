@@ -245,6 +245,16 @@ pub fn elapsed_time(start: Instant) -> actix_web::cookie::time::Duration {
     start.elapsed()
 }
 
+pub fn interval_to_millis(interval: &str) -> u64 {
+    match interval {
+        "1m" => MIN_AS_MILI,
+        "5m" => MIN_AS_MILI * 5,
+        "15m" => MIN_AS_MILI * 15,
+        "1h" => HOUR_AS_MILI,
+        _ => SEC_AS_MILI,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

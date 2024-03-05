@@ -68,7 +68,8 @@ impl KlineData {
     /// This method adds a new kline to the collection, replacing any existing kline with the same open time.
     /// Returns `true` if the kline was added or replaced, `false` if it was a duplicate and not added.
 
-    pub fn add_kline(&mut self, kline: Kline) -> bool {
+    pub fn add_kline(&mut self, kline: Kline, update_time: u64) -> bool {
+        self.meta.last_update = update_time;
         // get last kline
         if let Some(last) = self.klines.last() {
             // if last kline exists

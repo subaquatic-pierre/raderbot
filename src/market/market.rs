@@ -14,7 +14,7 @@ use crate::exchange::api::ExchangeInfo;
 use crate::exchange::stream::build_stream_id;
 use crate::exchange::types::{ApiResult, StreamType};
 use crate::utils::kline::{build_kline_key, build_ticker_key};
-use crate::utils::time::{floor_mili_ts, SEC_AS_MILI};
+use crate::utils::time::{floor_mili_ts, interval_to_millis, SEC_AS_MILI};
 use crate::utils::trade::build_market_trade_key;
 use crate::{
     exchange::{
@@ -125,10 +125,30 @@ impl Market {
     /// An `Option<Kline>` containing the most recent kline data if available; otherwise, `None`.
 
     pub async fn kline_data(&self, symbol: &str, interval: &str) -> Option<Kline> {
-        match self.exchange_api.get_kline(symbol, interval).await {
-            Ok(kline) => Some(kline),
-            Err(_) => None,
-        }
+        let last_open_time = generate_ts() - interval_to_millis(interval);
+
+        let kline = match self
+            .data
+            .lock()
+            .await
+            .kline_data(symbol, interval, Some(last_open_time), None, None)
+            .await
+        {
+            Some(kline_data) => {
+                info!("Getting Kline from kline_data on on Market");
+                kline_data.klines.last().cloned()
+            }
+            None => {
+                info!("Getting kline from remote API, kline_data doesn't exist on Market");
+                let kline = match self.exchange_api.get_kline(symbol, interval).await {
+                    Ok(kline) => Some(kline),
+                    Err(_e) => None,
+                };
+                kline
+            }
+        };
+
+        kline
     }
 
     /// Retrieves the most recent ticker data for a specified symbol.
@@ -145,9 +165,15 @@ impl Market {
     /// An `Option<Ticker>` containing the most recent ticker data if available; otherwise, `None`.
 
     pub async fn ticker_data(&self, symbol: &str) -> Option<Ticker> {
-        let ticker_data = match self.data.lock().await.ticker_data(symbol) {
-            Some(ticker) => Some(ticker),
+        let last_sec = generate_ts() - SEC_AS_MILI;
+        let ticker_data = match self.data.lock().await.ticker_data(symbol, last_sec) {
+            Some(ticker) => {
+                info!("Getting Ticker from ticker_data on on Market");
+
+                Some(ticker)
+            }
             None => {
+                info!("Getting Ticker remote API ticker_data older than 1 second or not found on Market");
                 let ticker_data = match self.exchange_api.get_ticker(symbol).await {
                     Ok(ticker) => Some(TickerData::new(symbol, ticker)),
                     Err(_) => None,
@@ -306,6 +332,8 @@ impl Market {
         self.add_needed_stream("BTCUSDT", StreamType::Ticker, None)
             .await;
         self.add_needed_stream("BTCUSDT", StreamType::MarketTrade, None)
+            .await;
+        self.add_needed_stream("BTCUSDT", StreamType::Kline, Some("1m"))
             .await;
 
         self.init_market_receivers().await;
@@ -516,7 +544,7 @@ impl MarketData {
 
         // add new kline to data if key found for kline symbol
         if let Some(kline_data) = self.all_klines.get_mut(&kline_key) {
-            kline_data.add_kline(kline);
+            kline_data.add_kline(kline, generate_ts());
         } else {
             // create new key for new kline eg. ETHUSDT@kline_1h
             let klines = vec![kline.clone()];
@@ -651,10 +679,15 @@ impl MarketData {
     ///
     /// Returns an Option<TickerData> containing the latest ticker information for the specified symbol, or None if the data is unavailable.
     /// return last 20 seconds of tickers for given symbol
-    pub fn ticker_data(&self, symbol: &str) -> Option<TickerData> {
+    pub fn ticker_data(&self, symbol: &str, from_ts: u64) -> Option<TickerData> {
         let ticker_key = build_ticker_key(symbol);
         if let Some(ticker_data) = self.all_tickers.get(&ticker_key) {
-            return Some(ticker_data.clone());
+            // ensure returning data newer that last_update_ts
+            if ticker_data.meta.last_update > from_ts {
+                return Some(ticker_data.clone());
+            } else {
+                return None;
+            }
         }
 
         None

@@ -110,6 +110,9 @@ impl Strategy {
         let kline_manager = self.kline_manager.clone();
 
         tokio::spawn(async move {
+            // wait until last 5 seconds of minute, to ensure getting latest kline
+            // data from market
+
             loop {
                 time::sleep(interval_duration).await;
 

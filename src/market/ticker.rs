@@ -71,6 +71,7 @@ impl TickerData {
     /// - `update_time`: The Unix timestamp (u64) at which the ticker is being updated.
 
     pub fn update_ticker(&mut self, ticker: Ticker, update_time: u64) {
+        self.meta.last_update = update_time;
         self.ticker = ticker;
 
         // increment len of tickers on meta
