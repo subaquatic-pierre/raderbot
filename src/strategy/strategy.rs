@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::task::JoinHandle;
@@ -15,7 +18,7 @@ use crate::{
         types::{ArcMutex, ArcSender},
     },
     strategy::algorithm::{Algorithm, AlgorithmBuilder},
-    utils::time::{generate_ts, timestamp_to_string},
+    utils::time::{floor_mili_ts, generate_ts, timestamp_to_string, MIN_AS_MILI, SEC_AS_MILI},
 };
 
 use super::types::{AlgorithmError, AlgorithmEvalResult, FirstLastEnum, SignalMessage};
@@ -111,16 +114,31 @@ impl Strategy {
 
         tokio::spawn(async move {
             // wait until last 5 seconds of minute, to ensure getting latest kline
-            // data from market
+            // data from market, ie. each request for fresh kline will
+            // the no older than last minute + 55 seconds, very close
+            // to any kline interval closing time
+            let next_minute_minus_5_sec =
+                (floor_mili_ts(generate_ts(), MIN_AS_MILI) + MIN_AS_MILI) - SEC_AS_MILI * 5;
+            loop {
+                let now = generate_ts();
+                if now > next_minute_minus_5_sec {
+                    break;
+                } else {
+                    time::sleep(Duration::from_secs(1)).await;
+                }
+            }
 
             loop {
+                // wait for duration of strategy interval first,
+                // to ensure at least one kline of data is populated in the market
                 time::sleep(interval_duration).await;
 
                 let market = market.clone();
                 let market = market.lock().await;
 
+                // perform some house keeping with klines before evaluating the data
+                // check kline is fresh otherwise continue to next interval
                 if let Some(kline) = market.kline_data(&symbol, &interval_str).await {
-                    // check kline is fresh otherwise continue to next interval
                     let last_kline = kline_manager.lock().await.get_kline(FirstLastEnum::Last);
 
                     if let Some(last_kline) = &last_kline {
@@ -143,7 +161,12 @@ impl Strategy {
                             .await
                             .set_kline(kline.clone(), FirstLastEnum::First);
                     }
+                }
 
+                // ---
+                // Main evaluation done here
+                // ---
+                if let Some(kline) = market.kline_data(&symbol, &interval_str).await {
                     let order_side = algorithm.lock().await.evaluate(kline.clone());
 
                     let order_side = match order_side {
@@ -167,6 +190,7 @@ impl Strategy {
                         break;
                     }
 
+                    // send signal back to bot
                     if let Err(e) = strategy_tx.send(signal) {
                         log::warn!("Unable to send signal back to RaderBot, {e}")
                     }
