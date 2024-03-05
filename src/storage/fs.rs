@@ -467,7 +467,12 @@ impl StorageManager for FsStorage {
     }
 
     // TODO: docs
-    async fn save_trades(&self, trades: &[MarketTrade], trade_key: &str) -> io::Result<()> {
+    async fn save_trades(
+        &self,
+        trades: &[MarketTrade],
+        trade_key: &str,
+        _is_bootstrap: bool,
+    ) -> io::Result<()> {
         // Build market directory and subdirectory for klines
         let mut market_dir = self.data_directory.join("market");
         market_dir.push("trades");

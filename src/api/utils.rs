@@ -135,7 +135,10 @@ async fn bootstrap_historical_trades(
 
             let trade_key = build_market_trade_key(&symbol);
 
-            if let Err(e) = storage_manager.save_trades(&agg_trades, &trade_key).await {
+            if let Err(e) = storage_manager
+                .save_trades(&agg_trades, &trade_key, true)
+                .await
+            {
                 info!("Unable to save trades: {e}");
             }
         }

@@ -397,7 +397,6 @@ impl ExchangeApi for BinanceApi {
         let close_time = arr[0][6].as_u64().unwrap();
 
         Ok(Kline {
-            id: Uuid::new_v4(),
             interval: interval.to_string(),
             symbol: symbol.to_string(),
             open_time,

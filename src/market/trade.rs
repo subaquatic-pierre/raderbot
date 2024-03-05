@@ -71,7 +71,6 @@ pub type MarketTradeId = Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MarketTrade {
-    pub id: MarketTradeId,
     pub symbol: String,
     pub timestamp: u64,
     pub qty: f64,
@@ -152,7 +151,6 @@ impl MarketTrade {
         let symbol = symbol.replace("USDT", "-USDT");
 
         Ok(Self {
-            id: Uuid::new_v4(),
             symbol: symbol.to_string(),
             timestamp: trade_time,
             qty,
@@ -165,7 +163,6 @@ impl MarketTrade {
 impl Default for MarketTrade {
     fn default() -> Self {
         Self {
-            id: Uuid::new_v4(),
             symbol: "default".to_string(),
             timestamp: generate_ts(),
             qty: 42.2,

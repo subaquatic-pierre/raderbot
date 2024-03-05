@@ -739,7 +739,7 @@ impl MarketData {
             // Clear tickers from ticker_data
             for (key, trade_data) in self.all_trades.iter_mut() {
                 self.storage_manager
-                    .save_trades(&trade_data.get_trades(), key)
+                    .save_trades(&trade_data.get_trades(), key, false)
                     .await
                     .expect("Unable to save Klines");
 

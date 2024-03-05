@@ -68,7 +68,6 @@ pub fn load_binance_klines(
             result.unwrap_or_else(|_| panic!("Unable to read Kline in file: {}", filepath_str));
 
         let kline = Kline {
-            id: Uuid::new_v4(),
             symbol: symbol.to_string(),
             interval: interval.to_string(),
             open_time: binance_kline.open_time,

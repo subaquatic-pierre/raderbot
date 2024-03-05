@@ -45,7 +45,12 @@ pub trait StorageManager: Send + Sync {
         to_ts: Option<u64>,
     ) -> Vec<MarketTrade>;
 
-    async fn save_trades(&self, trades: &[MarketTrade], trade_key: &str) -> io::Result<()>;
+    async fn save_trades(
+        &self,
+        trades: &[MarketTrade],
+        trade_key: &str,
+        is_bootstrap: bool,
+    ) -> io::Result<()>;
 
     /// Lists saved strategy information.
     ///

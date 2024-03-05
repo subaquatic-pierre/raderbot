@@ -4,6 +4,7 @@ use crate::{
     market::{kline::Kline, trade::MarketTrade},
     strategy::strategy::{StrategyId, StrategyInfo, StrategySummary},
     utils::{
+        bson::{build_bson_kline_meta, build_bson_trade_meta},
         kline::build_kline_key,
         time::{elapsed_time, start_timer, timestamp_to_datetime},
         trade::build_market_trade_key,
@@ -51,20 +52,22 @@ impl MongoDbStorage {
         &self,
         collection_name: &str,
     ) -> Result<Collection<BsonKline>, String> {
+        let collection_name = collection_name.replace("@", "_");
         let db = self.client.database("trading_db");
-        self.init_timeseries_collection(collection_name, "open_time", "id")
+        self.init_timeseries_collection(&collection_name, "open_time", "metadata")
             .await?;
-        Ok(db.collection(collection_name))
+        Ok(db.collection(&collection_name))
     }
 
     async fn trade_collection(
         &self,
         collection_name: &str,
     ) -> Result<Collection<BsonMarketTrade>, String> {
+        let collection_name = collection_name.replace("@", "_");
         let db = self.client.database("trading_db");
-        self.init_timeseries_collection(collection_name, "timestamp", "id")
+        self.init_timeseries_collection(&collection_name, "timestamp", "metadata")
             .await?;
-        Ok(db.collection(collection_name))
+        Ok(db.collection(&collection_name))
     }
 
     fn strategy_info_collection(&self) -> Collection<StrategyInfo> {
@@ -171,14 +174,16 @@ impl StorageManager for MongoDbStorage {
 
         if is_bootstrap {
             // delete all existing klines with open_times
-            let ids: Vec<bson::Uuid> = klines
-                .iter()
-                .map(|k| bson::Uuid::from_bytes(k.id.into_bytes()))
-                .collect();
+            let metas: Vec<String> = klines.iter().map(|k| build_bson_kline_meta(k)).collect();
 
-            let query = doc! {"id": {"$in": ids}};
-            if let Err(e) = collection.delete_many(query, None).await {
-                info!("{e}")
+            let query = doc! {"metadata": {"$in": metas }};
+            match collection.delete_many(query, None).await {
+                Err(e) => {
+                    info!("Error deleting klines before save, e: {e}");
+                }
+                Ok(res) => {
+                    info!("Deleted klines before save, {res:?}");
+                }
             };
         }
 
@@ -239,7 +244,12 @@ impl StorageManager for MongoDbStorage {
     }
 
     // TODO: docs
-    async fn save_trades(&self, trades: &[MarketTrade], trade_key: &str) -> std::io::Result<()> {
+    async fn save_trades(
+        &self,
+        trades: &[MarketTrade],
+        trade_key: &str,
+        is_bootstrap: bool,
+    ) -> std::io::Result<()> {
         let collection = self
             .trade_collection(trade_key)
             .await
@@ -252,25 +262,28 @@ impl StorageManager for MongoDbStorage {
         let mut end = cur + window_size;
 
         while end < total_len {
-            let ids: Vec<bson::Uuid> = trades[cur..end]
-                .iter()
-                .map(|t| BsonUuid::from_bytes(t.id.into_bytes()))
-                .collect();
+            // only perform delete on bootstrap mode
+            if is_bootstrap {
+                let metas: Vec<String> = trades[cur..end]
+                    .iter()
+                    .map(|t| build_bson_trade_meta(t))
+                    .collect();
 
-            let id_len = ids.len();
-            let query = doc! {"id": {"$in": ids}};
+                let metas_len = metas.len();
+                let query = doc! {"metadata": {"$in": metas}};
 
-            match collection.delete_many(query, None).await {
-                Err(e) => {
-                    info!(
-                        "Error deleting {} number of ids, inside window, e: {e}",
-                        id_len
-                    )
-                }
-                Ok(res) => {
-                    info!("Deleted inside window, cur: {cur} - end: {end} {res:?}",)
-                }
-            };
+                match collection.delete_many(query, None).await {
+                    Err(e) => {
+                        info!(
+                            "Error deleting {} number of metas, inside window, e: {e}",
+                            metas_len
+                        )
+                    }
+                    Ok(res) => {
+                        info!("Deleted inside window, cur: {cur} - end: {end} {res:?}",)
+                    }
+                };
+            }
 
             let bson_trades: Vec<BsonMarketTrade> =
                 trades[cur..end].iter().map(|k| k.clone().into()).collect();
@@ -286,25 +299,28 @@ impl StorageManager for MongoDbStorage {
             end = cur + window_size;
         }
 
-        let ids: Vec<bson::Uuid> = trades[cur..]
-            .iter()
-            .map(|t| BsonUuid::from_bytes(t.id.into_bytes()))
-            .collect();
-        let id_len = ids.len();
-        info!("Deleting remaining IDS if exist: {}", ids.len());
-        let query = doc! {"id": {"$in": ids}};
+        // only delete on bootstrap mode
+        if is_bootstrap {
+            let metas: Vec<String> = trades[cur..]
+                .iter()
+                .map(|t| build_bson_trade_meta(t))
+                .collect();
+            let metas_len = metas.len();
+            info!("Deleting remaining IDS if exist: {}", metas_len);
+            let query = doc! {"metadata": {"$in": metas}};
 
-        match collection.delete_many(query, None).await {
-            Err(e) => {
-                info!(
-                    "Error deleting {} number of ids, remaining IDS, e: {e}",
-                    id_len
-                )
-            }
-            Ok(res) => {
-                info!("Deleted remaining trades, cur: {cur} - end: {end} {res:?}",)
-            }
-        };
+            match collection.delete_many(query, None).await {
+                Err(e) => {
+                    info!(
+                        "Error deleting {} number of ids, remaining metas, e: {e}",
+                        metas_len
+                    )
+                }
+                Ok(res) => {
+                    info!("Deleted remaining trades, cur: {cur} - end: {end} {res:?}",)
+                }
+            };
+        }
 
         let bson_trades: Vec<BsonMarketTrade> =
             trades[cur..].iter().map(|k| k.clone().into()).collect();
@@ -342,7 +358,7 @@ impl StorageManager for MongoDbStorage {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BsonKline {
-    pub id: BsonUuid,
+    pub metadata: String,
     pub symbol: String,
     pub interval: String,
     pub open: f64,
@@ -357,7 +373,7 @@ pub struct BsonKline {
 impl From<Kline> for BsonKline {
     fn from(kline: Kline) -> Self {
         BsonKline {
-            id: BsonUuid::new(),
+            metadata: build_bson_kline_meta(&kline).to_string(),
             symbol: kline.symbol,
             interval: kline.interval,
             open: kline.open,
@@ -374,7 +390,6 @@ impl From<Kline> for BsonKline {
 impl From<BsonKline> for Kline {
     fn from(bson_kline: BsonKline) -> Self {
         Kline {
-            id: Uuid::from_bytes(bson_kline.id.bytes()),
             symbol: bson_kline.symbol,
             interval: bson_kline.interval,
             open: bson_kline.open,
@@ -390,7 +405,7 @@ impl From<BsonKline> for Kline {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BsonMarketTrade {
-    pub id: BsonUuid,
+    pub metadata: String,
     pub symbol: String,
     pub timestamp: DateTime,
     pub qty: f64,
@@ -401,7 +416,7 @@ pub struct BsonMarketTrade {
 impl From<MarketTrade> for BsonMarketTrade {
     fn from(trade: MarketTrade) -> Self {
         Self {
-            id: BsonUuid::from_bytes(trade.id.into_bytes()),
+            metadata: build_bson_trade_meta(&trade),
             symbol: trade.symbol,
             timestamp: DateTime::from_millis(trade.timestamp as i64),
             qty: trade.qty,
@@ -414,7 +429,6 @@ impl From<MarketTrade> for BsonMarketTrade {
 impl From<BsonMarketTrade> for MarketTrade {
     fn from(bson_trade: BsonMarketTrade) -> Self {
         Self {
-            id: Uuid::from_bytes(bson_trade.id.bytes()),
             symbol: bson_trade.symbol,
             timestamp: bson_trade.timestamp.timestamp_millis() as u64,
             qty: bson_trade.qty,

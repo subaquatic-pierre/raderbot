@@ -107,7 +107,12 @@ impl StorageManager for InfluxStorage {
     }
 
     // TODO: docs
-    async fn save_trades(&self, trades: &[MarketTrade], trade_key: &str) -> std::io::Result<()> {
+    async fn save_trades(
+        &self,
+        trades: &[MarketTrade],
+        trade_key: &str,
+        is_bootstrap: bool,
+    ) -> std::io::Result<()> {
         unimplemented!()
     }
 

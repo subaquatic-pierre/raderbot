@@ -78,7 +78,6 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
             };
 
             let market_trade = MarketTrade {
-                id: Uuid::new_v4(),
                 timestamp: floor_mili_ts(row.transact_time, SEC_AS_MILI),
                 price: row.price,
                 symbol: symbol.to_string(),
@@ -211,7 +210,6 @@ mod tests {
                 OrderSide::Sell
             };
             trades.push(MarketTrade {
-                id: Uuid::new_v4(),
                 symbol: "BTCUSD".to_string(),
                 timestamp: ts + (i as u64) * 100, // Incrementing timestamp by 0.1 second for each trade
                 qty: 1.0 + i as f64,              // Increasing quantity for variety
@@ -226,7 +224,6 @@ mod tests {
     fn test_adding_new_trade() {
         let mut trades = Vec::new();
         let new_trade = MarketTrade {
-            id: Uuid::new_v4(),
             symbol: "BTCUSD".to_string(),
             timestamp: 1609459201000, // Exact millisecond timestamp
             qty: 1.0,
@@ -245,7 +242,6 @@ mod tests {
         let ts = generate_ts();
         let mut trades = vec![];
         let trade = MarketTrade {
-            id: Uuid::new_v4(),
             symbol: "BTCUSD".to_string(),
             timestamp: ts, // Floored to the nearest second
             qty: 1.0,
@@ -253,7 +249,6 @@ mod tests {
             order_side: OrderSide::Buy,
         };
         let new_trade = MarketTrade {
-            id: Uuid::new_v4(),
             symbol: "BTCUSD".to_string(),
             timestamp: ts, // Within the same second, should be floored and aggregated
             qty: 2.0,
