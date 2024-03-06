@@ -1,10 +1,14 @@
+// #![feature(btree_extract_if)]
+use std::collections::{BTreeMap, HashMap};
+
+use log::info;
 use mongodb::{
     bson::{self, doc, to_document},
     IndexModel,
 };
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use serde_json::Value;
-use std::collections::HashMap;
+
 use uuid::Uuid;
 
 use crate::{
@@ -12,7 +16,7 @@ use crate::{
     market::market::MarketDataSymbol,
     utils::{
         number::parse_f64_from_lookup,
-        time::{calculate_kline_open_time, generate_ts},
+        time::{calculate_kline_open_time, generate_ts, timestamp_to_string},
     },
 };
 
@@ -25,7 +29,7 @@ use crate::{
 pub struct KlineMeta {
     pub symbol: String,
     pub interval: String,
-    pub len: u64,
+    pub len: usize,
     pub last_update: u64,
 }
 
@@ -48,7 +52,7 @@ impl KlineMeta {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KlineData {
     pub meta: KlineMeta,
-    pub klines: Vec<Kline>,
+    klines: BTreeMap<u64, Kline>,
 }
 
 impl KlineData {
@@ -59,39 +63,22 @@ impl KlineData {
     pub fn new(symbol: &str, interval: &str) -> Self {
         Self {
             meta: KlineMeta::new(symbol, interval),
-            klines: vec![],
+            klines: BTreeMap::new(),
         }
     }
 
     /// Adds a kline to the data set, ensuring chronological order and uniqueness based on open time.
     ///
     /// This method adds a new kline to the collection, replacing any existing kline with the same open time.
-    /// Returns `true` if the kline was added or replaced, `false` if it was a duplicate and not added.
+    pub fn add_kline(&mut self, kline: Kline) {
+        self.meta.last_update = generate_ts();
 
-    pub fn add_kline(&mut self, kline: Kline, update_time: u64) -> bool {
-        self.meta.last_update = update_time;
-        // get last kline
-        if let Some(last) = self.klines.last() {
-            // if last kline exists
-            // replace with latest if kline exists with same open time
-            if kline.open_time == last.open_time {
-                let last_dx = self.klines.len() - 1;
-                let _ = std::mem::replace(&mut self.klines[last_dx], kline);
+        self.klines.insert(kline.open_time, kline.clone());
+        self.meta.len = self.klines.len();
+    }
 
-                false
-            } else {
-                // add kline to end if open_time is not the same
-                self.klines.push(kline);
-                self.meta.len += 1;
-                true
-            }
-        } else {
-            // no klines in data, add new kline
-            self.klines.push(kline);
-            self.meta.len += 1;
-
-            true
-        }
+    pub fn klines(&self) -> Vec<Kline> {
+        self.klines.values().cloned().collect()
     }
 
     /// Clears all kline data from the collection, resetting the length to 0.
@@ -99,8 +86,25 @@ impl KlineData {
     /// This method is used to remove all existing klines from the `KlineData`, effectively resetting the data.
 
     pub fn clear_klines(&mut self) {
-        self.klines = vec![];
+        self.klines = BTreeMap::new();
         self.meta.len = 0;
+    }
+
+    pub fn drain_klines(&mut self, before_ts: u64) -> Vec<Kline> {
+        info!(
+            "Removing all klines before {} ...",
+            timestamp_to_string(before_ts)
+        );
+        let mut klines = vec![];
+        for kline in self.klines.values() {
+            if kline.open_time < before_ts {
+                klines.push(kline.clone())
+            }
+        }
+        self.klines.retain(|k, _v| k >= &before_ts);
+        self.meta.len = self.klines.len();
+
+        klines
     }
 }
 

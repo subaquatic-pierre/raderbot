@@ -10,7 +10,7 @@ use uuid::Uuid;
 use super::manager::StorageManager;
 use crate::{
     account::trade::OrderSide,
-    market::{kline::Kline, trade::MarketTrade},
+    market::{kline::Kline, trade::Trade},
     strategy::strategy::{StrategyId, StrategyInfo, StrategySummary},
     utils::{
         kline::build_kline_key,
@@ -102,14 +102,14 @@ impl StorageManager for InfluxStorage {
         symbol: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
-    ) -> Vec<MarketTrade> {
+    ) -> Vec<Trade> {
         unimplemented!()
     }
 
     // TODO: docs
     async fn save_trades(
         &self,
-        trades: &[MarketTrade],
+        trades: &[Trade],
         trade_key: &str,
         is_bootstrap: bool,
     ) -> std::io::Result<()> {

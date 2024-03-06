@@ -5,13 +5,13 @@ use std::collections::BTreeMap;
 use std::{collections::HashMap, fs::File, time::SystemTime};
 use uuid::Uuid;
 
-use crate::market::trade::{MarketTradeData, MarketTradeDataMeta};
+use crate::market::trade::{TradeData, TradeDataMeta};
 use crate::utils::time::generate_ts;
 use crate::{
     account::trade::OrderSide,
     market::{
         kline::{BinanceKline, Kline},
-        trade::MarketTrade,
+        trade::Trade,
     },
     utils::{
         csv::has_header,
@@ -34,8 +34,8 @@ struct BinanceAggTradeCsvRow {
     is_buyer_maker: bool,
 }
 
-pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> Vec<MarketTrade> {
-    let mut aggregated_trades_map: BTreeMap<(u64, OrderSide), MarketTrade> = BTreeMap::new();
+pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> Vec<Trade> {
+    let mut aggregated_trades_map: BTreeMap<(u64, OrderSide), Trade> = BTreeMap::new();
     let filepath_str = file_path.as_os_str().to_str().unwrap();
     info!("Loading Aggregate Trade Data from file: {filepath_str}");
 
@@ -66,7 +66,7 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
             .from_reader(file)
     };
 
-    let mut market_data = MarketTradeData::new(symbol);
+    let mut market_data = TradeData::new(symbol);
 
     for result in reader.deserialize::<BinanceAggTradeCsvRow>() {
         if let Err(e) = result {
@@ -81,7 +81,7 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
                 OrderSide::Buy
             };
 
-            let mut market_trade = MarketTrade {
+            let mut market_trade = Trade {
                 timestamp: floor_mili_ts(row.transact_time, SEC_AS_MILI),
                 price: row.price,
                 symbol: symbol.to_string(),
@@ -105,8 +105,8 @@ pub fn load_binance_agg_trades(file_path: std::path::PathBuf, symbol: &str) -> V
     market_data.trades()
 }
 
-fn aggregate_all_trades(trades: &mut Vec<MarketTrade>) {
-    let mut aggregated_trades_map: BTreeMap<(u64, OrderSide), MarketTrade> = BTreeMap::new();
+fn aggregate_all_trades(trades: &mut Vec<Trade>) {
+    let mut aggregated_trades_map: BTreeMap<(u64, OrderSide), Trade> = BTreeMap::new();
 
     for mut trade in trades.drain(..) {
         let floored_ts = floor_mili_ts(trade.timestamp, SEC_AS_MILI); // Floor to nearest second
@@ -126,7 +126,7 @@ fn aggregate_all_trades(trades: &mut Vec<MarketTrade>) {
     *trades = aggregated_trades_map.into_values().collect();
 }
 
-fn and_trade_and_aggregate(trades: &mut Vec<MarketTrade>, new_trade: MarketTrade) {
+fn and_trade_and_aggregate(trades: &mut Vec<Trade>, new_trade: Trade) {
     let floored_ts = floor_mili_ts(new_trade.timestamp, SEC_AS_MILI);
     // Find the position where the new trade should be inserted or aggregated
     let position = trades.iter().position(|trade| {
@@ -150,11 +150,11 @@ fn and_trade_and_aggregate(trades: &mut Vec<MarketTrade>, new_trade: MarketTrade
     }
 }
 
-pub fn is_same_ts_and_order_side(left: &MarketTrade, right: &MarketTrade) -> bool {
+pub fn is_same_ts_and_order_side(left: &Trade, right: &Trade) -> bool {
     left.order_side == right.order_side && left.timestamp == right.timestamp
 }
 
-pub fn save_trades(filename: std::path::PathBuf, trades: &[MarketTrade], _append: bool) {
+pub fn save_trades(filename: std::path::PathBuf, trades: &[Trade], _append: bool) {
     let str_filename = filename.as_os_str().to_string_lossy();
     info!("Saving Trades to new file: {str_filename}");
 
@@ -206,7 +206,7 @@ mod tests {
 
     use super::*;
 
-    fn generate_market_trades() -> Vec<MarketTrade> {
+    fn generate_market_trades() -> Vec<Trade> {
         let ts = 1709464311000;
         let mut trades = Vec::new();
         for i in 0..20 {
@@ -215,7 +215,7 @@ mod tests {
             } else {
                 OrderSide::Sell
             };
-            trades.push(MarketTrade {
+            trades.push(Trade {
                 symbol: "BTCUSD".to_string(),
                 timestamp: ts + (i as u64) * 100, // Incrementing timestamp by 0.1 second for each trade
                 qty: 1.0 + i as f64,              // Increasing quantity for variety
@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn test_adding_new_trade() {
         let mut trades = Vec::new();
-        let new_trade = MarketTrade {
+        let new_trade = Trade {
             symbol: "BTCUSD".to_string(),
             timestamp: 1609459201000, // Exact millisecond timestamp
             qty: 1.0,
@@ -247,14 +247,14 @@ mod tests {
     fn test_aggregating_trade() {
         let ts = generate_ts();
         let mut trades = vec![];
-        let trade = MarketTrade {
+        let trade = Trade {
             symbol: "BTCUSD".to_string(),
             timestamp: ts, // Floored to the nearest second
             qty: 1.0,
             price: 10000.0,
             order_side: OrderSide::Buy,
         };
-        let new_trade = MarketTrade {
+        let new_trade = Trade {
             symbol: "BTCUSD".to_string(),
             timestamp: ts, // Within the same second, should be floored and aggregated
             qty: 2.0,

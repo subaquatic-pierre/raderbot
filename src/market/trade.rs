@@ -15,13 +15,13 @@ use crate::{
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MarketTradeDataMeta {
+pub struct TradeDataMeta {
     pub symbol: String,
     pub len: usize,
     pub last_update: u64,
 }
 
-impl MarketTradeDataMeta {
+impl TradeDataMeta {
     pub fn new(symbol: &str) -> Self {
         Self {
             symbol: symbol.to_string(),
@@ -32,20 +32,20 @@ impl MarketTradeDataMeta {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MarketTradeData {
-    pub meta: MarketTradeDataMeta,
-    trades: BTreeMap<(u64, OrderSide), MarketTrade>,
+pub struct TradeData {
+    pub meta: TradeDataMeta,
+    trades: BTreeMap<(u64, OrderSide), Trade>,
 }
 
-impl MarketTradeData {
+impl TradeData {
     pub fn new(symbol: &str) -> Self {
         Self {
-            meta: MarketTradeDataMeta::new(symbol),
+            meta: TradeDataMeta::new(symbol),
             trades: BTreeMap::new(),
         }
     }
 
-    pub fn add_trade(&mut self, trade: &mut MarketTrade) {
+    pub fn add_trade(&mut self, trade: &mut Trade) {
         // update meta
         self.meta.last_update = generate_ts();
         self.meta.len += 1;
@@ -54,6 +54,8 @@ impl MarketTradeData {
         trade.timestamp = floor_mili_ts(trade.timestamp, SEC_AS_MILI);
         let key = (trade.timestamp, trade.order_side);
 
+        // aggregate trade qty and price if exists with same
+        // ts and buy side
         if let Some(existing_trade) = self.trades.get_mut(&key) {
             existing_trade.qty += trade.qty;
             existing_trade.price = (existing_trade.price + trade.price) / 2.0;
@@ -62,24 +64,37 @@ impl MarketTradeData {
         }
     }
 
-    pub fn trades(&self) -> Vec<MarketTrade> {
+    pub fn trades(&self) -> Vec<Trade> {
         self.trades.values().cloned().collect()
     }
 
     pub fn clear_trades(&mut self, before_ts: u64) {
+        self.trades.retain(|(ts, _), _v| ts >= &before_ts);
+        self.meta.len = self.trades.len();
+    }
+
+    pub fn drain_trades(&mut self, before_ts: u64) -> Vec<Trade> {
         info!(
             "Removing all trades before {} ...",
             timestamp_to_string(before_ts)
         );
-        self.trades.retain(|(ts, _), _v| ts >= &before_ts);
+        let mut trades = vec![];
+        for trade in self.trades.values() {
+            if trade.timestamp < before_ts {
+                trades.push(trade.clone())
+            }
+        }
+        self.trades.retain(|_k, v| v.timestamp >= before_ts);
         self.meta.len = self.trades.len();
+
+        trades
     }
 }
 
 pub type MarketTradeId = Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct MarketTrade {
+pub struct Trade {
     pub symbol: String,
     pub timestamp: u64,
     pub qty: f64,
@@ -87,7 +102,7 @@ pub struct MarketTrade {
     pub order_side: OrderSide,
 }
 
-impl MarketTrade {
+impl Trade {
     pub fn from_binance_lookup(lookup: HashMap<String, Value>) -> ApiResult<Self> {
         // {
         //     "e": "aggTrade",  // Event type
@@ -168,7 +183,7 @@ impl MarketTrade {
     }
 }
 
-impl Default for MarketTrade {
+impl Default for Trade {
     fn default() -> Self {
         Self {
             symbol: "default".to_string(),

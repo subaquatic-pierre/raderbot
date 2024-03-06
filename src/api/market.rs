@@ -30,12 +30,12 @@ async fn get_kline_data(
     let kline_data = market
         .lock()
         .await
-        .kline_data(&body.symbol, &body.interval)
+        .last_kline(&body.symbol, &body.interval)
         .await;
 
     if let Some(kline_data) = kline_data {
         // Return the stream data as JSON
-        let json_data = json!({ "kline_data": kline_data });
+        let json_data = json!({ "last_kline": kline_data });
         HttpResponse::Ok().json(json_data)
     } else {
         let json_data = json!({ "error": "Kline data not found" });
@@ -51,7 +51,7 @@ async fn get_ticker_data(
 ) -> impl Responder {
     let market = app_data.get_market().await;
 
-    let ticker_data = market.lock().await.ticker_data(&body.symbol).await;
+    let ticker_data = market.lock().await.last_ticker(&body.symbol).await;
 
     if let Some(ticker_data) = ticker_data {
         // Return the stream data as JSON
@@ -106,7 +106,7 @@ async fn get_trade_data(
     let trade_data = market
         .lock()
         .await
-        .trade_data(&body.symbol, from_ts, to_ts, body.limit)
+        .trade_data_range(&body.symbol, from_ts, to_ts, body.limit)
         .await;
 
     if let Some(trade_data) = trade_data {
@@ -154,7 +154,7 @@ async fn get_volume_data(
     let trade_data = market
         .lock()
         .await
-        .trade_data(&body.symbol, from_ts, to_ts, body.limit)
+        .trade_data_range(&body.symbol, from_ts, to_ts, body.limit)
         .await;
 
     if let Some(trade_data) = trade_data {
@@ -338,7 +338,7 @@ async fn open_stream(
                 .open_stream(stream_type, &symbol, None)
                 .await
         }
-        StreamType::MarketTrade => {
+        StreamType::Trade => {
             market
                 .lock()
                 .await

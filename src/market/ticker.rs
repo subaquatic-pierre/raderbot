@@ -1,5 +1,6 @@
+use log::info;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde_json::Value;
 
@@ -8,7 +9,7 @@ use crate::{
     market::market::MarketDataSymbol,
     utils::{
         number::{generate_random_id, parse_f64_from_lookup},
-        time::generate_ts,
+        time::{generate_ts, timestamp_to_string},
     },
 };
 
@@ -22,6 +23,7 @@ use crate::{
 pub struct TickerMeta {
     pub symbol: String,
     pub last_update: u64,
+    pub len: usize,
 }
 
 impl TickerMeta {
@@ -34,6 +36,7 @@ impl TickerMeta {
         Self {
             symbol: symbol.to_string(),
             last_update: generate_ts(),
+            len: 0,
         }
     }
 }
@@ -47,7 +50,7 @@ impl TickerMeta {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TickerData {
     pub meta: TickerMeta,
-    pub ticker: Ticker,
+    tickers: BTreeMap<u64, Ticker>,
 }
 
 impl TickerData {
@@ -57,11 +60,15 @@ impl TickerData {
     /// - `symbol`: A string slice that holds the symbol for the ticker.
     /// - `ticker`: A `Ticker` instance containing the current state of the ticker.
 
-    pub fn new(symbol: &str, ticker: Ticker) -> Self {
+    pub fn new(symbol: &str) -> Self {
         Self {
             meta: TickerMeta::new(symbol),
-            ticker,
+            tickers: BTreeMap::new(),
         }
+    }
+
+    pub fn tickers(&self) -> Vec<Ticker> {
+        self.tickers.values().cloned().collect()
     }
 
     /// Updates the ticker with new data and updates the last update timestamp.
@@ -70,14 +77,27 @@ impl TickerData {
     /// - `ticker`: A `Ticker` instance containing the new state of the ticker.
     /// - `update_time`: The Unix timestamp (u64) at which the ticker is being updated.
 
-    pub fn update_ticker(&mut self, ticker: Ticker, update_time: u64) {
-        self.meta.last_update = update_time;
-        self.ticker = ticker;
+    pub fn add_ticker(&mut self, ticker: Ticker) {
+        self.meta.last_update = generate_ts();
+        self.tickers.insert(ticker.time, ticker);
+    }
 
-        // increment len of tickers on meta
-        self.meta.last_update = update_time;
+    pub fn drain_tickers(&mut self, before_ts: u64) -> Vec<Ticker> {
+        info!(
+            "Removing all tickers before {} ...",
+            timestamp_to_string(before_ts)
+        );
 
-        // return true ticker added
+        let mut tickers = vec![];
+        for ticker in self.tickers.values() {
+            if ticker.time < before_ts {
+                tickers.push(ticker.clone())
+            }
+        }
+        self.tickers.retain(|k, _v| k >= &before_ts);
+        self.meta.len = self.tickers.len();
+
+        tickers
     }
 }
 

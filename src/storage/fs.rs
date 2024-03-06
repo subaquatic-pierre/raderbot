@@ -13,7 +13,7 @@ use std::io::{self};
 use std::path::{Path, PathBuf};
 
 use crate::market::kline::Kline;
-use crate::market::trade::MarketTrade;
+use crate::market::trade::Trade;
 use crate::strategy::strategy::{StrategyId, StrategyInfo, StrategySummary};
 use crate::utils::kline::{
     build_kline_filename, build_kline_key, generate_kline_filenames_in_range, get_min_max_open_time,
@@ -90,7 +90,7 @@ impl FsStorage {
     }
 
     // TODO: docs
-    fn _load_trades(&self, filename: &str) -> Option<Vec<MarketTrade>> {
+    fn _load_trades(&self, filename: &str) -> Option<Vec<Trade>> {
         let mut market_dir = self.data_directory.join("market");
         market_dir.push("trades");
         let file_path = market_dir.join(filename);
@@ -98,7 +98,7 @@ impl FsStorage {
         if let Ok(file) = fs::File::open(file_path) {
             let mut reader = ReaderBuilder::new().has_headers(false).from_reader(file);
 
-            let mut trades: Vec<MarketTrade> = Vec::new();
+            let mut trades: Vec<Trade> = Vec::new();
 
             for result in reader.deserialize() {
                 if let Ok(kline) = result {
@@ -136,11 +136,7 @@ impl FsStorage {
     }
 
     // TODO: docs
-    pub fn _merge_trades(
-        &self,
-        existing_trades: &[MarketTrade],
-        fresh_trades: &[MarketTrade],
-    ) -> Vec<MarketTrade> {
+    pub fn _merge_trades(&self, existing_trades: &[Trade], fresh_trades: &[Trade]) -> Vec<Trade> {
         let mut merged = Vec::new();
 
         if let Some(first_fresh) = fresh_trades.first() {
@@ -435,11 +431,11 @@ impl StorageManager for FsStorage {
         symbol: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
-    ) -> Vec<MarketTrade> {
+    ) -> Vec<Trade> {
         let trade_key = build_market_trade_key(symbol);
 
         // create filtered klines to hold all klines which are filtered
-        let mut filtered_trades: Vec<MarketTrade> = Vec::new();
+        let mut filtered_trades: Vec<Trade> = Vec::new();
 
         let filenames = match from_ts {
             Some(from_ts) => match to_ts {
@@ -469,7 +465,7 @@ impl StorageManager for FsStorage {
     // TODO: docs
     async fn save_trades(
         &self,
-        trades: &[MarketTrade],
+        trades: &[Trade],
         trade_key: &str,
         _is_bootstrap: bool,
     ) -> io::Result<()> {
@@ -478,7 +474,7 @@ impl StorageManager for FsStorage {
         market_dir.push("trades");
         std::fs::create_dir_all(&market_dir)?;
 
-        let mut trades_by_day: HashMap<u64, Vec<MarketTrade>> = HashMap::new();
+        let mut trades_by_day: HashMap<u64, Vec<Trade>> = HashMap::new();
         for trade in trades {
             let ts = floor_mili_ts(trade.timestamp, DAY_AS_MILI);
             if let Some(trades) = trades_by_day.get_mut(&ts) {
@@ -501,10 +497,8 @@ impl StorageManager for FsStorage {
                     .from_path(&file_path)?;
 
                 // Read existing klines into a vector
-                let mut existing_trades: Vec<MarketTrade> =
-                    reader
-                        .deserialize()
-                        .collect::<Result<Vec<MarketTrade>, _>>()?;
+                let mut existing_trades: Vec<Trade> =
+                    reader.deserialize().collect::<Result<Vec<Trade>, _>>()?;
 
                 // sort klines by open_time
                 existing_trades.sort_by_key(|k| k.timestamp);

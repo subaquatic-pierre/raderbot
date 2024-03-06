@@ -6,14 +6,14 @@ use crate::{
     },
 };
 
-use super::trade::{MarketTrade, MarketTradeData};
+use super::trade::{Trade, TradeData};
 use log::info;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Serialize)]
 pub struct MarketTradeVolume {
-    // pub trade_data: MarketTradeData,
+    // pub trade_data: TradeData,
     // Use String as the key type to avoid f64 precision issues
 }
 
@@ -27,7 +27,7 @@ impl MarketTradeVolume {
     // Method to calculate bucketed volumes with dynamic bucket sizes based on price_granularity
     pub fn calc_volume_buckets(
         &self,
-        trades: &[MarketTrade],
+        trades: &[Trade],
         price_granularity: usize,
         time_interval: &str,
     ) -> BucketedVolumeData {
@@ -91,7 +91,7 @@ impl MarketTradeVolume {
 
     pub fn calc_price_buckets(
         &self,
-        trades: &[MarketTrade],
+        trades: &[Trade],
         price_granularity: usize,
     ) -> BTreeMap<String, BucketVolume> {
         let mut volume_by_price_bucket = BTreeMap::new();
@@ -120,7 +120,7 @@ impl MarketTradeVolume {
 
     pub fn calc_time_buckets(
         &self,
-        trades: &[MarketTrade],
+        trades: &[Trade],
         time_interval: &str,
     ) -> BTreeMap<String, BucketVolume> {
         let mut volume_by_time_bucket = BTreeMap::new();
@@ -148,7 +148,7 @@ impl MarketTradeVolume {
         volume_by_time_bucket
     }
 
-    pub fn calc_min_max(&self, trades: &[MarketTrade]) -> (f64, f64) {
+    pub fn calc_min_max(&self, trades: &[Trade]) -> (f64, f64) {
         let min_price = trades
             .iter()
             .map(|t| t.price)
@@ -162,7 +162,7 @@ impl MarketTradeVolume {
         (min_price, max_price)
     }
 
-    pub fn calc_start_end_time(&self, trades: &[MarketTrade]) -> (String, String) {
+    pub fn calc_start_end_time(&self, trades: &[Trade]) -> (String, String) {
         let start_time = if let Some(trade) = trades.first() {
             timestamp_to_string(trade.timestamp)
         } else {

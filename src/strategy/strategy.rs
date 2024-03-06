@@ -138,35 +138,16 @@ impl Strategy {
 
                 // perform some house keeping with klines before evaluating the data
                 // check kline is fresh otherwise continue to next interval
-                if let Some(kline) = market.kline_data(&symbol, &interval_str).await {
-                    let last_kline = kline_manager.lock().await.get_kline(FirstLastEnum::Last);
-
-                    if let Some(last_kline) = &last_kline {
-                        if last_kline.open_time == kline.open_time {
-                            continue;
-                        }
-                    } else {
-                        kline_manager
-                            .lock()
-                            .await
-                            .set_kline(kline.clone(), FirstLastEnum::Last);
-                    }
-
-                    // if first kline is empty, set it
-                    let first_kline = kline_manager.lock().await.get_kline(FirstLastEnum::First);
-
-                    if first_kline.is_none() {
-                        kline_manager
-                            .lock()
-                            .await
-                            .set_kline(kline.clone(), FirstLastEnum::First);
+                if let Some(kline) = market.last_kline(&symbol, &interval_str).await {
+                    if kline_manager.lock().await.must_continue(kline) {
+                        continue;
                     }
                 }
 
                 // ---
                 // Main evaluation done here
                 // ---
-                if let Some(kline) = market.kline_data(&symbol, &interval_str).await {
+                if let Some(kline) = market.last_kline(&symbol, &interval_str).await {
                     let order_side = algorithm.lock().await.evaluate(kline.clone());
 
                     let order_side = match order_side {
@@ -651,15 +632,21 @@ impl StrategyKlineManager {
         }
     }
 
-    /// Sets a k-line as the initial or final for the strategy's execution.
-    ///
-    /// * `kline` - The k-line to set.
-    /// * `first_last` - Whether this k-line is the initial or final for the execution.
+    pub fn must_continue(&mut self, kline: Kline) -> bool {
+        let mut must_continue = false;
 
-    pub fn set_kline(&mut self, kline: Kline, first_last: FirstLastEnum) {
-        match first_last {
-            FirstLastEnum::First => self.first_kline = Some(kline),
-            FirstLastEnum::Last => self.last_kline = Some(kline),
-        };
+        if let Some(last_kline) = &self.last_kline {
+            if last_kline.open_time == kline.open_time {
+                must_continue = true
+            }
+        } else {
+            self.last_kline = Some(kline.clone());
+        }
+
+        if self.first_kline.is_none() {
+            self.first_kline = Some(kline.clone());
+        }
+
+        must_continue
     }
 }

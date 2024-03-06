@@ -90,14 +90,14 @@ impl BackTest {
     /// * `kline_data` - Historical k-line data over which the backtest will be run.
 
     pub async fn run(&mut self, kline_data: KlineData) {
-        if let Some(first) = kline_data.klines.first() {
+        if let Some(first) = kline_data.klines().first() {
             self.period_start_price = first.open
         }
-        if let Some(last) = kline_data.klines.last() {
+        if let Some(last) = kline_data.klines().last() {
             self.period_end_price = last.close
         }
 
-        for kline in kline_data.klines {
+        for kline in kline_data.klines() {
             let eval_result = self.strategy.algorithm.lock().await.evaluate(kline.clone());
 
             let order_side = match eval_result {

@@ -20,7 +20,7 @@ use crate::account::trade::{OrderSide, Position, TradeTx};
 use crate::exchange::api::{ExchangeApi, QueryStr};
 
 use crate::market::messages::MarketMessage;
-use crate::market::trade::MarketTrade;
+use crate::market::trade::Trade;
 use crate::market::types::{ArcMutex, ArcSender};
 use crate::market::{kline::Kline, ticker::Ticker};
 
@@ -570,13 +570,13 @@ impl StreamManager for BingXStreamManager {
                 self.kline_streams
                     .insert(stream_meta.id.clone(), thread_handle);
             }
-            StreamType::MarketTrade => {
+            StreamType::Trade => {
                 let market_sender = self.market_sender.clone();
 
                 let thread_handle = tokio::spawn(async move {
                     loop {
                         // TODO: Implement get market trade
-                        let trade = MarketTrade::default();
+                        let trade = Trade::default();
                         let _ = market_sender.send(MarketMessage::UpdateMarketTrade(trade));
 
                         tokio::time::sleep(Duration::from_secs(1)).await;

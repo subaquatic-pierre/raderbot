@@ -14,7 +14,7 @@ use crate::exchange::api::ExchangeInfo;
 use crate::exchange::stream::build_stream_id;
 use crate::exchange::types::{ApiResult, StreamType};
 use crate::utils::kline::{build_kline_key, build_ticker_key};
-use crate::utils::time::{floor_mili_ts, interval_to_millis, SEC_AS_MILI};
+use crate::utils::time::{floor_mili_ts, interval_to_millis, MIN_AS_MILI, SEC_AS_MILI};
 use crate::utils::trade::build_market_trade_key;
 use crate::{
     exchange::{
@@ -31,7 +31,7 @@ use crate::{
     utils::time::generate_ts,
 };
 
-use super::trade::{MarketTrade, MarketTradeData, MarketTradeDataMeta};
+use super::trade::{Trade, TradeData, TradeDataMeta};
 use super::types::ArcMutex;
 use super::volume::MarketTradeVolume;
 
@@ -66,7 +66,6 @@ impl Market {
     /// An instance of `Market`, ready to process market data and interact with the exchange API.
 
     pub async fn new(
-        // stream_manager: ArcMutex<StreamManager>,
         market_receiver: ArcReceiver<MarketMessage>,
         exchange_api: Arc<Box<dyn ExchangeApi>>,
         storage_manager: Arc<Box<dyn StorageManager>>,
@@ -75,7 +74,6 @@ impl Market {
         let mut _self = Self {
             data: ArcMutex::new(MarketData::new(storage_manager)),
             market_receiver,
-            // stream_manager,
             exchange_api,
             needed_streams: ArcMutex::new(vec![]),
         };
@@ -105,7 +103,7 @@ impl Market {
     /// An `Option<f64>` representing the latest price of the symbol if available; otherwise, `None`.
 
     pub async fn last_price(&self, symbol: &str) -> Option<f64> {
-        let ticker = self.ticker_data(symbol).await;
+        let ticker = self.last_ticker(symbol).await;
 
         ticker.map(|ticker| ticker.last_price)
     }
@@ -124,7 +122,7 @@ impl Market {
     ///
     /// An `Option<Kline>` containing the most recent kline data if available; otherwise, `None`.
 
-    pub async fn kline_data(&self, symbol: &str, interval: &str) -> Option<Kline> {
+    pub async fn last_kline(&self, symbol: &str, interval: &str) -> Option<Kline> {
         let last_open_time = generate_ts() - interval_to_millis(interval);
 
         let kline = match self
@@ -136,7 +134,7 @@ impl Market {
         {
             Some(kline_data) => {
                 info!("Getting Kline from kline_data on on Market");
-                kline_data.klines.last().cloned()
+                kline_data.klines().last().cloned()
             }
             None => {
                 info!("Getting kline from remote API, kline_data doesn't exist on Market");
@@ -164,24 +162,25 @@ impl Market {
     ///
     /// An `Option<Ticker>` containing the most recent ticker data if available; otherwise, `None`.
 
-    pub async fn ticker_data(&self, symbol: &str) -> Option<Ticker> {
+    pub async fn last_ticker(&self, symbol: &str) -> Option<Ticker> {
+        // must be within the last second
         let last_sec = generate_ts() - SEC_AS_MILI;
-        let ticker_data = match self.data.lock().await.ticker_data(symbol, last_sec) {
-            Some(ticker) => {
+        let ticker = match self.data.lock().await.ticker_data(symbol, last_sec) {
+            Some(ticker_data) => {
                 info!("Getting Ticker from ticker_data on on Market");
 
-                Some(ticker)
+                ticker_data.tickers().last().cloned()
             }
             None => {
                 info!("Getting Ticker remote API ticker_data older than 1 second or not found on Market");
-                let ticker_data = match self.exchange_api.get_ticker(symbol).await {
-                    Ok(ticker) => Some(TickerData::new(symbol, ticker)),
+                let ticker = match self.exchange_api.get_ticker(symbol).await {
+                    Ok(ticker) => Some(ticker),
                     Err(_) => None,
                 };
-                ticker_data
+                ticker
             }
         };
-        ticker_data.map(|ticker| ticker.ticker)
+        ticker
     }
 
     /// Fetches a range of Kline data for a specified symbol and interval, optionally filtered by timestamps and limited in size.
@@ -216,13 +215,13 @@ impl Market {
     }
 
     // TODO: docs
-    pub async fn trade_data(
+    pub async fn trade_data_range(
         &self,
         symbol: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
         limit: Option<usize>,
-    ) -> Option<MarketTradeData> {
+    ) -> Option<TradeData> {
         self.data
             .lock()
             .await
@@ -331,7 +330,7 @@ impl Market {
         // Add initial needed streams
         self.add_needed_stream("BTCUSDT", StreamType::Ticker, None)
             .await;
-        self.add_needed_stream("BTCUSDT", StreamType::MarketTrade, None)
+        self.add_needed_stream("BTCUSDT", StreamType::Trade, None)
             .await;
         self.add_needed_stream("BTCUSDT", StreamType::Kline, Some("1m"))
             .await;
@@ -353,17 +352,13 @@ impl Market {
 
                 match message {
                     MarketMessage::UpdateKline(kline) => {
-                        market_data.lock().await.add_kline(kline).await;
+                        market_data.lock().await.update_kline(kline).await;
                     }
                     MarketMessage::UpdateTicker(ticker) => {
-                        market_data.lock().await.update_ticker(ticker);
+                        market_data.lock().await.update_ticker(ticker).await;
                     }
                     MarketMessage::UpdateMarketTrade(mut trade) => {
-                        market_data
-                            .lock()
-                            .await
-                            .update_market_trade(&mut trade)
-                            .await;
+                        market_data.lock().await.update_trade(&mut trade).await;
                     }
                 }
             }
@@ -499,13 +494,13 @@ pub trait MarketDataSymbol {
 pub struct MarketData {
     all_klines: HashMap<String, KlineData>,
     all_tickers: HashMap<String, TickerData>,
-    all_trades: HashMap<String, MarketTradeData>,
+    all_trades: HashMap<String, TradeData>,
     storage_manager: Arc<Box<dyn StorageManager>>,
-    last_backup: SystemTime,
+    last_backup: u64,
 }
 
 /// Specifies the interval in seconds between consecutive backups of market data.
-const BACKUP_INTERVAL_SECS: u64 = 300; // 5min
+const BACKUP_INTERVAL_SECS: u64 = MIN_AS_MILI * 1; // 5min
 
 impl MarketData {
     /// Initializes a new instance of MarketData, creating a central repository for both kline and ticker data managed throughout the application lifecycle.
@@ -526,7 +521,7 @@ impl MarketData {
             all_klines: HashMap::new(),
             all_tickers: HashMap::new(),
             all_trades: HashMap::new(),
-            last_backup: SystemTime::now(),
+            last_backup: generate_ts(),
         }
     }
 
@@ -538,25 +533,21 @@ impl MarketData {
     ///
     /// - kline: The Kline instance representing the new market data to be added.
     ///
-    pub async fn add_kline(&mut self, kline: Kline) {
+    pub async fn update_kline(&mut self, kline: Kline) {
         // get kline key eg. BTCUSDT@kline_1m
         let kline_key = build_kline_key(&kline.symbol, &kline.interval);
 
         // add new kline to data if key found for kline symbol
         if let Some(kline_data) = self.all_klines.get_mut(&kline_key) {
-            kline_data.add_kline(kline, generate_ts());
+            kline_data.add_kline(kline);
         } else {
-            // create new key for new kline eg. ETHUSDT@kline_1h
-            let klines = vec![kline.clone()];
-            let new_kline_data = KlineData {
-                meta: KlineMeta::new(&kline.symbol, &kline.interval),
-                klines,
-            };
+            let mut new_kline_data = KlineData::new(&kline.symbol, &kline.interval);
+            new_kline_data.add_kline(kline);
             self.all_klines
                 .insert(kline_key.to_string(), new_kline_data);
         }
 
-        self.handle_data_backup(true).await;
+        self.handle_data_backup().await;
     }
 
     /// Updates the latest ticker data for a given symbol. If an entry for the symbol exists, it updates the existing data; otherwise, it creates a new entry with the provided ticker information. This method is crucial for maintaining up-to-date market prices and other relevant ticker information.
@@ -565,40 +556,38 @@ impl MarketData {
     ///
     /// - ticker: The Ticker instance containing the latest market data for a specific symbol.
     ///
-    pub fn update_ticker(&mut self, ticker: Ticker) {
+    pub async fn update_ticker(&mut self, ticker: Ticker) {
         let ticker_key = build_ticker_key(&ticker.symbol);
-        let now = generate_ts();
 
         if let Some(ticker_data) = self.all_tickers.get_mut(&ticker_key) {
-            ticker_data.update_ticker(ticker, now);
+            ticker_data.add_ticker(ticker);
         } else {
-            let new_ticker_data = TickerData {
-                meta: TickerMeta::new(&ticker.symbol),
-                ticker,
-            };
+            let mut new_ticker_data = TickerData::new(&ticker.symbol);
+            new_ticker_data.add_ticker(ticker);
+
             self.all_tickers
                 .insert(ticker_key.to_string(), new_ticker_data);
         }
+
+        self.handle_data_backup().await;
     }
 
     // TODO: write docs
-    pub async fn update_market_trade(&mut self, trade: &mut MarketTrade) {
+    pub async fn update_trade(&mut self, trade: &mut Trade) {
         let trade_key = build_market_trade_key(&trade.symbol);
 
         if let Some(trade_data) = self.all_trades.get_mut(&trade_key) {
             trade_data.add_trade(trade);
         } else {
-            // create new MarketTradeData for given symbol
-            let mut new_trade_data = MarketTradeData::new(&trade.symbol);
+            // create new TradeData for given symbol
+            let mut new_trade_data = TradeData::new(&trade.symbol);
             // add new trade
             new_trade_data.add_trade(trade);
             self.all_trades
                 .insert(trade_key.to_string(), new_trade_data);
         }
 
-        self.handle_data_backup(true).await;
-
-        // TODO: implement update market volume
+        self.handle_data_backup().await;
     }
 
     /// Retrieves a range of kline data for a specific symbol and interval, optionally filtered by a start and end timestamp, with a limit on the number of klines returned. This method aggregates data from both in-memory storage and persistent storage, providing a comprehensive view of historical market data.
@@ -624,8 +613,10 @@ impl MarketData {
     ) -> Option<KlineData> {
         let kline_key = build_kline_key(symbol, interval);
 
+        let mut kline_data = KlineData::new(symbol, interval);
+
         let in_mem_kline = match self.all_klines.get(&kline_key) {
-            Some(kline_data) => kline_data.klines.clone(),
+            Some(kline_data) => kline_data.klines(),
             None => vec![],
         };
 
@@ -652,20 +643,15 @@ impl MarketData {
         }
 
         // Create a new KlineData object to hold the filtered klines
-        let filtered_kline_data = KlineData {
-            meta: KlineMeta {
-                symbol: symbol.to_string(),
-                interval: interval.to_string(),
-                len: filtered_klines.len() as u64,
-                last_update: generate_ts(),
-            },
-            klines: filtered_klines,
-        };
 
-        if filtered_kline_data.meta.len == 0 {
+        filtered_klines.iter().for_each(|k| {
+            kline_data.add_kline(k.clone());
+        });
+
+        if kline_data.meta.len == 0 {
             None
         } else {
-            Some(filtered_kline_data)
+            Some(kline_data)
         }
     }
 
@@ -679,10 +665,12 @@ impl MarketData {
     ///
     /// Returns an Option<TickerData> containing the latest ticker information for the specified symbol, or None if the data is unavailable.
     /// return last 20 seconds of tickers for given symbol
+    // TODO: implement getting ticker data from storage
+    // this is to be able to get ticker data in range
     pub fn ticker_data(&self, symbol: &str, from_ts: u64) -> Option<TickerData> {
         let ticker_key = build_ticker_key(symbol);
         if let Some(ticker_data) = self.all_tickers.get(&ticker_key) {
-            // ensure returning data newer that last_update_ts
+            // ensure returning data newer that from_ts
             if ticker_data.meta.last_update > from_ts {
                 return Some(ticker_data.clone());
             } else {
@@ -700,10 +688,10 @@ impl MarketData {
         from_ts: Option<u64>,
         to_ts: Option<u64>,
         _limit: Option<usize>,
-    ) -> Option<MarketTradeData> {
+    ) -> Option<TradeData> {
         let trade_key = build_market_trade_key(symbol);
 
-        let mut market_data = MarketTradeData::new(symbol);
+        let mut market_data = TradeData::new(symbol);
 
         let in_mem_trades = match self.all_trades.get(&trade_key) {
             Some(trade_data) => trade_data.trades(),
@@ -749,37 +737,40 @@ impl MarketData {
     // Private methods
     // ---
 
-    async fn handle_data_backup(&mut self, clear_memory: bool) {
-        let time_delta = self.last_backup + Duration::from_secs(BACKUP_INTERVAL_SECS);
+    async fn handle_data_backup(&mut self) {
+        let now = generate_ts();
 
-        if time_delta < SystemTime::now() {
+        if self.last_backup + BACKUP_INTERVAL_SECS < now {
             // clear all klines
             for (key, kline_data) in self.all_klines.iter_mut() {
+                let klines = kline_data.drain_klines(self.last_backup);
                 self.storage_manager
-                    .save_klines(&kline_data.klines, key, false)
+                    .save_klines(&klines, key, false)
                     .await
                     .expect("Unable to save Klines");
-
-                if clear_memory {
-                    kline_data.clear_klines()
-                }
             }
 
             // Clear trade_data
             for (key, trade_data) in self.all_trades.iter_mut() {
+                let trades = trade_data.drain_trades(self.last_backup);
                 self.storage_manager
-                    .save_trades(&trade_data.trades(), key, false)
+                    .save_trades(&trades, key, false)
                     .await
-                    .expect("Unable to save Klines");
+                    .expect("Unable to save trades");
+            }
 
-                if clear_memory {
-                    let now = generate_ts();
-                    trade_data.clear_trades(now - (SEC_AS_MILI * BACKUP_INTERVAL_SECS));
-                }
+            // Clear ticker_data
+            for (key, ticker_data) in self.all_tickers.iter_mut() {
+                let tickers = ticker_data.drain_tickers(self.last_backup);
+                // TODO: write tickers to storage
+                // self.storage_manager
+                //     .save_trades(&trades, key, false)
+                //     .await
+                //     .expect("Unable to save Klines");
             }
 
             // Update the last backup time
-            self.last_backup = SystemTime::now();
+            self.last_backup = now;
         }
     }
 }

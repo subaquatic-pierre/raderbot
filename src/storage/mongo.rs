@@ -1,7 +1,7 @@
 use super::manager::StorageManager;
 use crate::{
     account::trade::OrderSide,
-    market::{kline::Kline, trade::MarketTrade},
+    market::{kline::Kline, trade::Trade},
     strategy::strategy::{StrategyId, StrategyInfo, StrategySummary},
     utils::{
         bson::{build_bson_kline_meta, build_bson_trade_meta},
@@ -202,7 +202,7 @@ impl StorageManager for MongoDbStorage {
         symbol: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
-    ) -> Vec<MarketTrade> {
+    ) -> Vec<Trade> {
         let mut timestamp_query = doc! {};
 
         if let Some(from_ts) = from_ts {
@@ -231,7 +231,7 @@ impl StorageManager for MongoDbStorage {
             Ok(collection) => collection,
         };
 
-        let mut trades: Vec<MarketTrade> = Vec::new();
+        let mut trades: Vec<Trade> = Vec::new();
 
         if let Ok(mut cursor) = collection.find(query, None).await {
             while let Ok(Some(trade)) = cursor.try_next().await {
@@ -246,7 +246,7 @@ impl StorageManager for MongoDbStorage {
     // TODO: docs
     async fn save_trades(
         &self,
-        trades: &[MarketTrade],
+        trades: &[Trade],
         trade_key: &str,
         is_bootstrap: bool,
     ) -> std::io::Result<()> {
@@ -413,8 +413,8 @@ pub struct BsonMarketTrade {
     pub order_side: OrderSide,
 }
 
-impl From<MarketTrade> for BsonMarketTrade {
-    fn from(trade: MarketTrade) -> Self {
+impl From<Trade> for BsonMarketTrade {
+    fn from(trade: Trade) -> Self {
         Self {
             metadata: build_bson_trade_meta(&trade),
             symbol: trade.symbol,
@@ -426,7 +426,7 @@ impl From<MarketTrade> for BsonMarketTrade {
     }
 }
 
-impl From<BsonMarketTrade> for MarketTrade {
+impl From<BsonMarketTrade> for Trade {
     fn from(bson_trade: BsonMarketTrade) -> Self {
         Self {
             symbol: bson_trade.symbol,

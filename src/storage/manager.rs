@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::error::Error;
 use std::io::{self};
 
-use crate::market::trade::MarketTrade;
+use crate::market::trade::Trade;
 use crate::strategy::strategy::StrategyInfo;
 use crate::{
     market::kline::Kline,
@@ -43,11 +43,11 @@ pub trait StorageManager: Send + Sync {
         symbol: &str,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
-    ) -> Vec<MarketTrade>;
+    ) -> Vec<Trade>;
 
     async fn save_trades(
         &self,
-        trades: &[MarketTrade],
+        trades: &[Trade],
         trade_key: &str,
         is_bootstrap: bool,
     ) -> io::Result<()>;

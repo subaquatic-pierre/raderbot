@@ -21,7 +21,7 @@ use crate::account::trade::{OrderSide, Position, TradeTx};
 use crate::exchange::api::{ExchangeApi, QueryStr};
 use crate::exchange::types::ArcEsStreamSync;
 use crate::market::messages::MarketMessage;
-use crate::market::trade::MarketTrade;
+use crate::market::trade::Trade;
 use crate::market::types::{ArcMutex, ArcSender};
 use crate::market::{kline::Kline, ticker::Ticker};
 use crate::utils::number::{parse_f64_from_lookup, parse_f64_from_value, parse_usize_from_value};
@@ -547,7 +547,7 @@ impl ExchangeApi for BinanceApi {
                     BinanceApi::format_binance_symbol(symbol, true)
                 )
             }
-            StreamType::MarketTrade => {
+            StreamType::Trade => {
                 format!(
                     "{}/ws/{}@aggTrade",
                     self.ws_host,
@@ -671,12 +671,11 @@ impl StreamManager for BinanceStreamManager {
                                                 .send(MarketMessage::UpdateTicker(ticker));
                                         }
                                     }
-                                    StreamType::MarketTrade => {
+                                    StreamType::Trade => {
                                         let lookup: HashMap<String, Value> =
                                             serde_json::from_str(&text).unwrap();
 
-                                        if let Ok(trade) = MarketTrade::from_binance_lookup(lookup)
-                                        {
+                                        if let Ok(trade) = Trade::from_binance_lookup(lookup) {
                                             let _ = market_sender
                                                 .send(MarketMessage::UpdateMarketTrade(trade));
                                         }

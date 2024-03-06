@@ -157,7 +157,7 @@ pub fn build_stream_id(symbol: &str, stream_type: StreamType, interval: Option<&
         StreamType::Ticker => {
             format!("{}@ticker", symbol)
         }
-        StreamType::MarketTrade => {
+        StreamType::Trade => {
             format!("{}@trade", symbol)
         }
     }

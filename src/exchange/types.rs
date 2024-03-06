@@ -134,7 +134,7 @@ pub enum StreamType {
     Kline,
     /// Represents a Ticker stream type.
     Ticker,
-    MarketTrade,
+    Trade,
 }
 
 /// Implementation of the `Display` trait for `StreamType`.
@@ -149,7 +149,7 @@ impl Display for StreamType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // Match on the enum variant to format the display string
         match self {
-            StreamType::MarketTrade => write!(f, "trade"),
+            StreamType::Trade => write!(f, "trade"),
             StreamType::Kline => write!(f, "kline"),
             StreamType::Ticker => write!(f, "ticker"),
         }

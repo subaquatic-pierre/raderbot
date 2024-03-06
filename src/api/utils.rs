@@ -112,7 +112,7 @@ async fn bootstrap_historical_trades(
 
     let user_dirs = UserDirs::new().expect("Failed to get user directories");
     let home_dir = user_dirs.home_dir();
-    let data_dir = home_dir.join("Projects/BinanceData/MarketTrade");
+    let data_dir = home_dir.join("Projects/BinanceData/Trade");
 
     let org_entries = fs::read_dir(data_dir).unwrap();
 
