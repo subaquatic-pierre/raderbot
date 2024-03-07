@@ -33,7 +33,7 @@ use crate::{
 
 use super::trade::{Trade, TradeData, TradeDataMeta};
 use super::types::ArcMutex;
-use super::volume::TradePriceVolume;
+use super::volume::PriceVolume;
 
 /// Represents the main market data structure for a trading application, managing market data streams, and integrating with exchange APIs.
 

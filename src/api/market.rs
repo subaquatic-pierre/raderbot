@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::exchange::types::StreamType;
 
 use crate::app::AppState;
-use crate::market::volume::TradePriceVolume;
+use crate::market::volume::{PriceVolume, TimeVolume, TradeVolume};
 use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]
@@ -174,7 +174,13 @@ async fn get_volume_data(
         );
         let bucket_size = body.bucket_size.unwrap_or_else(|| 10.0);
 
-        let mut market_volume = TradePriceVolume::new(bucket_size, true);
+        let mut market_volume = PriceVolume::new(bucket_size, true);
+        // let mut market_volume= if let Some(interval) = &body.time_interval {
+        //     Box::new(TimeVolume::new(interval))
+        // } else {
+        //     Box::new(PriceVolume::new(bucket_size, true))
+        // };
+
         market_volume.add_trades(&trade_data.trades());
         let bucket_volume = market_volume.result();
         // Return the stream data as JSON
