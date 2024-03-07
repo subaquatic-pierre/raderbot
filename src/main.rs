@@ -9,6 +9,7 @@
 
 use app::new_app_state;
 use dotenv::dotenv;
+use log::info;
 use std::io;
 
 use actix_files::Files;
@@ -61,7 +62,7 @@ async fn main() -> io::Result<()> {
     dotenv().ok();
     env_logger::init();
 
-    println!(
+    info!(
         "Server listening at {:}:{:}...",
         SERVER_HOST.0, SERVER_HOST.1
     );

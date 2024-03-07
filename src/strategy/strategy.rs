@@ -113,6 +113,7 @@ impl Strategy {
         let kline_manager = self.kline_manager.clone();
 
         tokio::spawn(async move {
+            // let market = market.clone();
             // wait until last 5 seconds of minute, to ensure getting latest kline
             // data from market, ie. each request for fresh kline will
             // the no older than last minute + 55 seconds, very close
@@ -133,12 +134,9 @@ impl Strategy {
                 // to ensure at least one kline of data is populated in the market
                 time::sleep(interval_duration).await;
 
-                let market = market.clone();
-                let market = market.lock().await;
-
                 // perform some house keeping with klines before evaluating the data
                 // check kline is fresh otherwise continue to next interval
-                if let Some(kline) = market.last_kline(&symbol, &interval_str).await {
+                if let Some(kline) = market.lock().await.last_kline(&symbol, &interval_str).await {
                     if kline_manager.lock().await.must_continue(kline) {
                         continue;
                     }
@@ -147,7 +145,9 @@ impl Strategy {
                 // ---
                 // Main evaluation done here
                 // ---
-                if let Some(kline) = market.last_kline(&symbol, &interval_str).await {
+                // let market = market.clone();
+
+                if let Some(kline) = market.lock().await.last_kline(&symbol, &interval_str).await {
                     let order_side = algorithm.lock().await.evaluate(kline.clone());
 
                     let order_side = match order_side {

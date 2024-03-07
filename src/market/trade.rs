@@ -68,16 +68,11 @@ impl TradeData {
         self.trades.values().cloned().collect()
     }
 
-    pub fn clear_trades(&mut self, before_ts: u64) {
-        self.trades.retain(|(ts, _), _v| ts >= &before_ts);
-        self.meta.len = self.trades.len();
-    }
-
     pub fn drain_trades(&mut self, before_ts: u64) -> Vec<Trade> {
-        info!(
-            "Removing all trades before {} ...",
-            timestamp_to_string(before_ts)
-        );
+        // info!(
+        //     "Removing all trades before {} ...",
+        //     timestamp_to_string(before_ts)
+        // );
         let mut trades = vec![];
         for trade in self.trades.values() {
             if trade.timestamp < before_ts {

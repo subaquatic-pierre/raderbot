@@ -67,6 +67,7 @@ impl RaderBot {
 
         let storage_manager: Arc<Box<dyn StorageManager>> = match storage_type {
             "INFLUX" => {
+                info!("Using InfluxStorage as storage backend");
                 let manager: Arc<Box<dyn StorageManager>> =
                     match InfluxStorage::new(influx_uri, influx_token).await {
                         Ok(manager) => Arc::new(Box::new(manager)),
@@ -78,6 +79,7 @@ impl RaderBot {
                 manager
             }
             "MONGO" => {
+                info!("Using MongoDbStorage as storage backend");
                 let manager: Arc<Box<dyn StorageManager>> =
                     match MongoDbStorage::new(mongo_uri).await {
                         Ok(manager) => Arc::new(Box::new(manager)),
@@ -88,7 +90,11 @@ impl RaderBot {
                     };
                 manager
             }
-            _ => Arc::new(Box::new(FsStorage::default())),
+            _ => {
+                info!("Using FsStorage as storage backend");
+
+                Arc::new(Box::new(FsStorage::default()))
+            }
         };
 
         // create new market to hold market data

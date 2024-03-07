@@ -133,11 +133,11 @@ impl Market {
             .await
         {
             Some(kline_data) => {
-                info!("Getting Kline from kline_data on on Market");
+                // info!("Getting Kline from kline_data on on Market");
                 kline_data.klines().last().cloned()
             }
             None => {
-                info!("Getting kline from remote API, kline_data doesn't exist on Market");
+                // info!("Getting kline from remote API, kline_data doesn't exist on Market");
                 let kline = match self.exchange_api.get_kline(symbol, interval).await {
                     Ok(kline) => Some(kline),
                     Err(_e) => None,
@@ -167,12 +167,12 @@ impl Market {
         let last_sec = generate_ts() - SEC_AS_MILI;
         let ticker = match self.data.lock().await.ticker_data(symbol, last_sec) {
             Some(ticker_data) => {
-                info!("Getting Ticker from ticker_data on on Market");
+                // info!("Getting Ticker from ticker_data on on Market");
 
                 ticker_data.tickers().last().cloned()
             }
             None => {
-                info!("Getting Ticker remote API ticker_data older than 1 second or not found on Market");
+                // info!("Getting Ticker remote API ticker_data older than 1 second or not found on Market");
                 let ticker = match self.exchange_api.get_ticker(symbol).await {
                     Ok(ticker) => Some(ticker),
                     Err(_) => None,
@@ -744,19 +744,23 @@ impl MarketData {
             // clear all klines
             for (key, kline_data) in self.all_klines.iter_mut() {
                 let klines = kline_data.drain_klines(self.last_backup);
-                self.storage_manager
-                    .save_klines(&klines, key, false)
-                    .await
-                    .expect("Unable to save Klines");
+                if klines.len() > 0 {
+                    self.storage_manager
+                        .save_klines(&klines, key, false)
+                        .await
+                        .expect("Unable to save Klines");
+                }
             }
 
             // Clear trade_data
             for (key, trade_data) in self.all_trades.iter_mut() {
                 let trades = trade_data.drain_trades(self.last_backup);
-                self.storage_manager
-                    .save_trades(&trades, key, false)
-                    .await
-                    .expect("Unable to save trades");
+                if trades.len() > 0 {
+                    self.storage_manager
+                        .save_trades(&trades, key, false)
+                        .await
+                        .expect("Unable to save trades");
+                }
             }
 
             // Clear ticker_data

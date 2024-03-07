@@ -81,20 +81,11 @@ impl KlineData {
         self.klines.values().cloned().collect()
     }
 
-    /// Clears all kline data from the collection, resetting the length to 0.
-    ///
-    /// This method is used to remove all existing klines from the `KlineData`, effectively resetting the data.
-
-    pub fn clear_klines(&mut self) {
-        self.klines = BTreeMap::new();
-        self.meta.len = 0;
-    }
-
     pub fn drain_klines(&mut self, before_ts: u64) -> Vec<Kline> {
-        info!(
-            "Removing all klines before {} ...",
-            timestamp_to_string(before_ts)
-        );
+        // info!(
+        //     "Removing all klines before {} ...",
+        //     timestamp_to_string(before_ts)
+        // );
         let mut klines = vec![];
         for kline in self.klines.values() {
             if kline.open_time < before_ts {

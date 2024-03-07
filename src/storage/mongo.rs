@@ -182,7 +182,7 @@ impl StorageManager for MongoDbStorage {
                     info!("Error deleting klines before save, e: {e}");
                 }
                 Ok(res) => {
-                    info!("Deleted klines before save, {res:?}");
+                    // info!("Deleted klines before save, {res:?}");
                 }
             };
         }
@@ -279,8 +279,8 @@ impl StorageManager for MongoDbStorage {
                             metas_len
                         )
                     }
-                    Ok(res) => {
-                        info!("Deleted inside window, cur: {cur} - end: {end} {res:?}",)
+                    Ok(_res) => {
+                        // info!("Deleted inside window, cur: {cur} - end: {end} {res:?}",)
                     }
                 };
             }
@@ -316,8 +316,8 @@ impl StorageManager for MongoDbStorage {
                         metas_len
                     )
                 }
-                Ok(res) => {
-                    info!("Deleted remaining trades, cur: {cur} - end: {end} {res:?}",)
+                Ok(_res) => {
+                    // info!("Deleted remaining trades, cur: {cur} - end: {end} {res:?}",)
                 }
             };
         }
@@ -327,10 +327,10 @@ impl StorageManager for MongoDbStorage {
         // info!(
         let trades_len = bson_trades.len();
 
-        info!(
-            "Adding remain trades, with length {} ...",
-            bson_trades.len()
-        );
+        // info!(
+        //     "Adding remain trades, with length {} ...",
+        //     bson_trades.len()
+        // );
         if let Err(e) = collection.insert_many(bson_trades, None).await {
             info!(
                 "Error inserting {} number of trades, remaining trades, e: {e}",

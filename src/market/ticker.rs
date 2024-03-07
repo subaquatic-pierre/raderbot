@@ -83,10 +83,10 @@ impl TickerData {
     }
 
     pub fn drain_tickers(&mut self, before_ts: u64) -> Vec<Ticker> {
-        info!(
-            "Removing all tickers before {} ...",
-            timestamp_to_string(before_ts)
-        );
+        // info!(
+        //     "Removing all tickers before {} ...",
+        //     timestamp_to_string(before_ts)
+        // );
 
         let mut tickers = vec![];
         for ticker in self.tickers.values() {
