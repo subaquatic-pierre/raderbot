@@ -20,8 +20,13 @@ test:
 clean:
 	cargo clean
 
-docs:
+rust-docs:
 	cargo doc --no-deps
 
-serve-docs:
+serve-rust-docs:
 	python -m http.server --directory ./target/doc 3001
+
+docs:
+	scipts/build-docs.sh
+
+serve-docs:
