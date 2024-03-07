@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::exchange::types::StreamType;
 
 use crate::app::AppState;
-use crate::market::volume::MarketTradeVolume;
+use crate::market::volume::TradePriceVolume;
 use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]
@@ -70,8 +70,6 @@ struct GetMarketTradesParams {
     from_ts: Option<String>,
     to_ts: Option<String>,
     limit: Option<usize>,
-    price_granularity: Option<usize>,
-    time_interval: Option<String>,
 }
 #[post("/trade-data")]
 async fn get_trade_data(
@@ -121,10 +119,20 @@ async fn get_trade_data(
     }
 }
 
+#[derive(Deserialize)]
+struct GetMarketVolumeParams {
+    symbol: String,
+    from_ts: Option<String>,
+    to_ts: Option<String>,
+    limit: Option<usize>,
+    bucket_size: Option<f64>,
+    time_interval: Option<String>,
+}
+
 #[post("/trade-volume-data")]
 async fn get_volume_data(
     app_data: web::Data<AppState>,
-    body: Json<GetMarketTradesParams>,
+    body: Json<GetMarketVolumeParams>,
 ) -> impl Responder {
     let market = app_data.get_market().await;
 
@@ -158,17 +166,17 @@ async fn get_volume_data(
         .await;
 
     if let Some(trade_data) = trade_data {
-        let time_interval = body
-            .time_interval
-            .clone()
-            .unwrap_or_else(|| "1h".to_string());
-
-        let market_volume = MarketTradeVolume::new();
-        let bucket_volume = market_volume.calc_volume_buckets(
-            &trade_data.trades(),
-            body.price_granularity.unwrap_or_else(|| 10),
-            &time_interval,
+        // use time interval if looking to create market volume by time
+        let time_interval = Some(
+            body.time_interval
+                .clone()
+                .unwrap_or_else(|| "1h".to_string()),
         );
+        let bucket_size = body.bucket_size.unwrap_or_else(|| 10.0);
+
+        let mut market_volume = TradePriceVolume::new(bucket_size, true);
+        market_volume.add_trades(&trade_data.trades());
+        let bucket_volume = market_volume.result();
         // Return the stream data as JSON
         let json_data = json!({ "volume_data": bucket_volume });
         HttpResponse::Ok().json(json_data)

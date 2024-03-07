@@ -98,6 +98,9 @@ pub struct Trade {
 }
 
 impl Trade {
+    pub fn floor_price(&self, to: f64) -> f64 {
+        (self.price / to).floor() * 10.0
+    }
     pub fn from_binance_lookup(lookup: HashMap<String, Value>) -> ApiResult<Self> {
         // {
         //     "e": "aggTrade",  // Event type

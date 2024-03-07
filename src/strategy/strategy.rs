@@ -134,20 +134,46 @@ impl Strategy {
                 // to ensure at least one kline of data is populated in the market
                 time::sleep(interval_duration).await;
 
+                // get the latest kline from the market
+                let kline = market.lock().await.last_kline(&symbol, &interval_str).await;
+
                 // perform some house keeping with klines before evaluating the data
                 // check kline is fresh otherwise continue to next interval
-                if let Some(kline) = market.lock().await.last_kline(&symbol, &interval_str).await {
+
+                if let Some(kline) = &kline {
                     if kline_manager.lock().await.must_continue(kline) {
                         continue;
                     }
                 }
 
-                // ---
-                // Main evaluation done here
-                // ---
-                // let market = market.clone();
+                // get trades within the span of the kline open_time and close_time
+                let trades = match &kline {
+                    Some(kline) => {
+                        let trades = match market
+                            .lock()
+                            .await
+                            .trade_data_range(
+                                &symbol,
+                                // get 5 seconds in passed to ensure all trades
+                                Some(kline.open_time - SEC_AS_MILI * 5),
+                                Some(kline.close_time),
+                                None,
+                            )
+                            .await
+                        {
+                            Some(trade_data) => Some(trade_data.trades()),
+                            None => None,
+                        };
+                        trades
+                    }
+                    None => None,
+                };
 
-                if let Some(kline) = market.lock().await.last_kline(&symbol, &interval_str).await {
+                if let Some(kline) = kline {
+                    // ---
+                    // Main evaluation done here
+                    // ---
+                    info!("Trades to be passed into evaluate method, {:?}", trades);
                     let order_side = algorithm.lock().await.evaluate(kline.clone());
 
                     let order_side = match order_side {
@@ -432,11 +458,14 @@ impl Strategy {
         let mut min_balance = if trades.is_empty() { 0.0 } else { f64::MAX };
         let mut current_balance = 0.0;
 
+        let mut trades = trades.clone();
+        trades.sort_by(|a, b| a.close_time.cmp(&b.close_time));
+
         for trade_tx in trades {
             let profit = trade_tx.calc_profit();
             current_balance += profit;
 
-            if current_balance < min_balance {
+            if current_balance <= min_balance {
                 min_balance = current_balance;
             }
         }
@@ -632,7 +661,7 @@ impl StrategyKlineManager {
         }
     }
 
-    pub fn must_continue(&mut self, kline: Kline) -> bool {
+    pub fn must_continue(&mut self, kline: &Kline) -> bool {
         let mut must_continue = false;
 
         if let Some(last_kline) = &self.last_kline {
