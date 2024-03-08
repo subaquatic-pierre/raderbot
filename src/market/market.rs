@@ -68,7 +68,7 @@ impl Market {
     pub async fn new(
         market_receiver: ArcReceiver<MarketMessage>,
         exchange_api: Arc<Box<dyn ExchangeApi>>,
-        storage_manager: Arc<Box<dyn StorageManager>>,
+        storage_manager: Arc<dyn StorageManager>,
         init_workers: bool,
     ) -> Self {
         let mut _self = Self {
@@ -495,7 +495,7 @@ pub struct MarketData {
     all_klines: HashMap<String, KlineData>,
     all_tickers: HashMap<String, TickerData>,
     all_trades: HashMap<String, TradeData>,
-    storage_manager: Arc<Box<dyn StorageManager>>,
+    storage_manager: Arc<dyn StorageManager>,
     last_backup: u64,
 }
 
@@ -515,7 +515,7 @@ impl MarketData {
     ///
     /// Returns an instance of MarketData, fully initialized and ready for data ingestion and querying.
 
-    pub fn new(storage_manager: Arc<Box<dyn StorageManager>>) -> Self {
+    pub fn new(storage_manager: Arc<dyn StorageManager>) -> Self {
         Self {
             storage_manager,
             all_klines: HashMap::new(),

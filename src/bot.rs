@@ -32,7 +32,7 @@ pub struct RaderBot {
     pub account: ArcMutex<Account>,
     strategy_manager: ArcMutex<StrategyManager>,
     pub exchange_api: Arc<Box<dyn ExchangeApi>>,
-    pub storage_manager: Arc<Box<dyn StorageManager>>,
+    pub storage_manager: Arc<dyn StorageManager>,
     strategy_tx: ArcSender<SignalMessage>,
     strategy_rx: ArcReceiver<SignalMessage>,
 }
@@ -65,35 +65,34 @@ impl RaderBot {
 
         // create new storage manager
 
-        let storage_manager: Arc<Box<dyn StorageManager>> = match storage_type {
+        let storage_manager: Arc<dyn StorageManager> = match storage_type {
             "INFLUX" => {
                 info!("Using InfluxStorage as storage backend");
-                let manager: Arc<Box<dyn StorageManager>> =
+                let manager: Arc<dyn StorageManager> =
                     match InfluxStorage::new(influx_uri, influx_token).await {
-                        Ok(manager) => Arc::new(Box::new(manager)),
+                        Ok(manager) => Arc::new(manager),
                         Err(e) => {
                             info!("There was an error instantiating InfluxDB: {e}");
-                            Arc::new(Box::new(FsStorage::default()))
+                            Arc::new(FsStorage::default())
                         }
                     };
                 manager
             }
             "MONGO" => {
                 info!("Using MongoDbStorage as storage backend");
-                let manager: Arc<Box<dyn StorageManager>> =
-                    match MongoDbStorage::new(mongo_uri).await {
-                        Ok(manager) => Arc::new(Box::new(manager)),
-                        Err(e) => {
-                            info!("There was an error instantiating MongoDB: {e}");
-                            Arc::new(Box::new(FsStorage::default()))
-                        }
-                    };
+                let manager: Arc<dyn StorageManager> = match MongoDbStorage::new(mongo_uri).await {
+                    Ok(manager) => Arc::new(manager),
+                    Err(e) => {
+                        info!("There was an error instantiating MongoDB: {e}");
+                        Arc::new(FsStorage::default())
+                    }
+                };
                 manager
             }
             _ => {
                 info!("Using FsStorage as storage backend");
 
-                Arc::new(Box::new(FsStorage::default()))
+                Arc::new(FsStorage::default())
             }
         };
 

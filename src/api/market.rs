@@ -174,6 +174,8 @@ async fn get_volume_data(
         );
         let bucket_size = body.bucket_size.unwrap_or_else(|| 10.0);
 
+        // let volume: dyn TradeVolume = PriceVolume::new(10.0, false);
+
         let mut market_volume = PriceVolume::new(bucket_size, true);
         // let mut market_volume= if let Some(interval) = &body.time_interval {
         //     Box::new(TimeVolume::new(interval))

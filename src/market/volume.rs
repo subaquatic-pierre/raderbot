@@ -2,7 +2,7 @@ use crate::{
     account::trade::OrderSide,
     utils::{
         time::{floor_mili_ts, generate_ts, timestamp_to_string, HOUR_AS_MILI, MIN_AS_MILI},
-        trade::calc_min_max,
+        trade::{calc_min_max, calc_total_volume},
     },
 };
 
@@ -109,21 +109,6 @@ impl PriceVolume {
         // return the key
         poc_key.parse::<f64>().unwrap()
     }
-
-    fn total_volume(&self) -> BucketVolume {
-        let mut total_buy_volume = 0.0;
-        let mut total_sell_volume = 0.0;
-
-        for bucket in self.buckets.values() {
-            total_buy_volume += bucket.buy_volume;
-            total_sell_volume += bucket.sell_volume;
-        }
-
-        BucketVolume {
-            buy_volume: total_buy_volume,
-            sell_volume: total_sell_volume,
-        }
-    }
 }
 
 impl TradeVolume for PriceVolume {
@@ -148,7 +133,7 @@ impl TradeVolume for PriceVolume {
     }
 
     fn result(&self) -> PriceVolumeData {
-        let total_volume = self.total_volume();
+        let total_volume = calc_total_volume(&self.buckets);
 
         PriceVolumeData {
             num_buckets: self.buckets.len(),
@@ -211,8 +196,22 @@ impl TimeVolume {
         Self {
             interval: interval.to_string(),
             buckets: BTreeMap::new(),
-            start_time: 0,
+            start_time: u64::MAX,
             end_time: 0,
+        }
+    }
+
+    fn update_times(&mut self, trades: &[Trade]) {
+        // update first time
+        if let Some(trade) = trades.first() {
+            if trade.timestamp < self.start_time {
+                self.start_time = trade.timestamp
+            }
+        }
+
+        // update last time
+        if let Some(trade) = trades.last() {
+            self.end_time = trade.timestamp
         }
     }
 
@@ -239,43 +238,21 @@ impl TimeVolume {
             }
         }
     }
-
-    pub fn total_volume(&self) -> BucketVolume {
-        let mut volume = BucketVolume::default();
-
-        for val in self.buckets.values() {
-            volume.buy_volume += val.buy_volume;
-            volume.sell_volume += val.sell_volume
-        }
-
-        volume
-    }
 }
 
 impl TradeVolume for TimeVolume {
     fn add_trades(&mut self, trades: &[Trade]) {
         self.add_trade_by_time(trades);
+        self.update_times(trades)
     }
 
     fn result(&self) -> TimeVolumeData {
-        let start_time = if let Some((k, _)) = self.buckets.first_key_value() {
-            k.to_string()
-        } else {
-            timestamp_to_string(generate_ts())
-        };
-
-        let end_time = if let Some((k, _)) = self.buckets.last_key_value() {
-            k.to_string()
-        } else {
-            timestamp_to_string(generate_ts())
-        };
-
-        let total_volume = self.total_volume();
+        let total_volume = calc_total_volume(&self.buckets);
 
         TimeVolumeData {
             num_buckets: self.buckets.len(),
-            start_time,
-            end_time,
+            start_time: timestamp_to_string(self.start_time),
+            end_time: timestamp_to_string(self.end_time),
             total_volume,
             buckets: self.buckets.clone(),
         }

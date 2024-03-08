@@ -6,6 +6,7 @@ use std::{collections::HashMap, fs::File, time::SystemTime};
 use uuid::Uuid;
 
 use crate::market::trade::{TradeData, TradeDataMeta};
+use crate::market::volume::BucketVolume;
 use crate::utils::time::generate_ts;
 use crate::{
     account::trade::OrderSide,
@@ -165,6 +166,17 @@ pub fn calc_min_max(trades: &[Trade]) -> (f64, f64) {
         .max_by(|x, y| x.partial_cmp(y).unwrap())
         .unwrap();
     (min_price, max_price)
+}
+
+pub fn calc_total_volume(buckets: &BTreeMap<String, BucketVolume>) -> BucketVolume {
+    let mut volume = BucketVolume::default();
+
+    for val in buckets.values() {
+        volume.buy_volume += val.buy_volume;
+        volume.sell_volume += val.sell_volume
+    }
+
+    volume
 }
 
 #[cfg(test)]
