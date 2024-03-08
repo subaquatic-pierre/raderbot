@@ -22,6 +22,7 @@ use mongodb::{
 };
 use mongodb::{
     bson::{from_bson, to_bson, Bson},
+    error::Error as MongoError,
     options::IndexOptions,
 };
 use mongodb::{
@@ -33,7 +34,18 @@ use mongodb::{
 use mongodb::{Client, Collection};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::io;
+use std::{fmt, io};
+
+#[derive(Debug)]
+struct MongoErrorWrapper(String);
+
+impl fmt::Display for MongoErrorWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Error for MongoErrorWrapper {}
 
 pub struct MongoDbStorage {
     client: Client,
@@ -70,16 +82,8 @@ impl MongoDbStorage {
         Ok(db.collection(&collection_name))
     }
 
-    fn strategy_info_collection(&self) -> Collection<StrategyInfo> {
-        self.client
-            .database("trading_db")
-            .collection("strategy_info")
-    }
-
-    fn strategy_summary_collection(&self) -> Collection<StrategySummary> {
-        self.client
-            .database("trading_db")
-            .collection("strategy_summary")
+    fn strategy_collection(&self) -> Collection<StrategySummary> {
+        self.client.database("trading_db").collection("strategy")
     }
 
     async fn init_timeseries_collection(
@@ -341,18 +345,45 @@ impl StorageManager for MongoDbStorage {
     }
 
     async fn list_saved_strategies(&self) -> Result<Vec<StrategyInfo>, Box<dyn Error>> {
-        unimplemented!()
+        let collection = self.strategy_collection();
+
+        let mut cursor = collection.find(doc! {}, None).await?;
+
+        let mut infos = vec![];
+
+        while let Some(result) = cursor.next().await {
+            if let Ok(strategy) = result {
+                infos.push(strategy.info);
+            }
+        }
+
+        Ok(infos)
     }
-    async fn save_strategy_summary(&self, _summary: StrategySummary) -> Result<(), Box<dyn Error>> {
-        // TODO: Implement save strategy summary on DBStorageManager
-        unimplemented!()
+
+    async fn save_strategy_summary(&self, summary: StrategySummary) -> Result<(), Box<dyn Error>> {
+        let collection = self.strategy_collection();
+
+        let _ = collection
+            .insert_one(summary, None)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error>);
+
+        Ok(())
     }
+
     async fn get_strategy_summary(
         &self,
-        _strategy_id: StrategyId,
+        strategy_id: StrategyId,
     ) -> Result<StrategySummary, Box<dyn Error>> {
-        // TODO: Implement get strategy summary on DBStorageManager
-        unimplemented!()
+        let collection = self.strategy_collection();
+
+        let filter = doc! {"info.id": Bson::String(strategy_id.to_string())};
+
+        if let Some(res) = collection.find_one(filter, None).await? {
+            Ok(res)
+        } else {
+            Err(Box::new(MongoErrorWrapper("No strategy found".to_string())))
+        }
     }
 }
 

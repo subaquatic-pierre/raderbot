@@ -134,11 +134,6 @@ impl TradeVolume for PriceVolume {
     fn result(&self) -> PriceVolumeData {
         let total_volume = calc_total_volume(&self.buckets);
 
-        info!(
-            "TOTAL: {}",
-            (total_volume.buy_volume + total_volume.sell_volume)
-        );
-
         PriceVolumeData {
             num_buckets: self.buckets.len(),
             buckets: self.buckets.clone(),
