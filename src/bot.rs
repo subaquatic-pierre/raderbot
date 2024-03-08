@@ -1,7 +1,7 @@
 use dotenv_codegen::dotenv;
 
 use log::info;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -20,9 +20,9 @@ use crate::{
         backer::BackTest,
         signal::SignalManager,
         strategy::{Strategy, StrategyId, StrategyInfo, StrategySettings, StrategySummary},
-        types::{AlgorithmError, SignalMessage},
+        types::{AlgoError, SignalMessage},
     },
-    utils::channel::build_arc_channel,
+    utils::{channel::build_arc_channel, json},
 };
 
 use tokio::task::JoinHandle;
@@ -149,7 +149,7 @@ impl RaderBot {
         interval: &str,
         settings: StrategySettings,
         algorithm_params: Value,
-    ) -> Result<StrategyInfo, AlgorithmError> {
+    ) -> Result<StrategyInfo, AlgoError> {
         let market = self.market.clone();
         let strategy_tx = self.strategy_tx.clone();
 
@@ -235,7 +235,7 @@ impl RaderBot {
         to_ts: u64,
         settings: StrategySettings,
         algorithm_params: Value,
-    ) -> Result<StrategySummary, AlgorithmError> {
+    ) -> Result<StrategySummary, AlgoError> {
         let strategy_tx = self.strategy_tx.clone();
         let strategy = Strategy::new(
             strategy_name,
@@ -305,7 +305,7 @@ impl RaderBot {
         &mut self,
         strategy_id: StrategyId,
         params: Value,
-    ) -> Result<(), AlgorithmError> {
+    ) -> Result<(), AlgoError> {
         let manager = self.strategy_manager.clone();
         let mut manager = manager.lock().await;
         if let Some((_handle, strategy)) = manager.get(&strategy_id) {
@@ -317,7 +317,13 @@ impl RaderBot {
         let manager = self.strategy_manager.clone();
         let mut manager = manager.lock().await;
         if let Some((_handle, strategy)) = manager.get(&strategy_id) {
-            return Some(strategy.get_algorithm_params().await);
+            // if let Ok(value) => {
+
+            // }
+            let params = strategy.get_algorithm_params().await;
+            if let Ok(val) = serde_json::to_value(params) {
+                return Some(val);
+            };
         }
         None
     }

@@ -1,4 +1,4 @@
-## Trading Algorithms
+## Trading Algos
 
 Given the data available in the Kline struct (which includes the symbol, interval, open, high, low, close prices, volume, open time, and close time), there are several types of trading algorithms you could implement. These algorithms can vary greatly in complexity and approach, depending on the trading strategy you wish to pursue. Here's a list of potential algorithm types based on the Kline data:
 

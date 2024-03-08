@@ -11,9 +11,9 @@ use crate::{
     strategy::{
         signal::SignalManager,
         strategy::{Strategy, StrategySummary},
-        types::{AlgorithmEvalResult, SignalMessage},
+        types::{AlgoEvalResult, SignalMessage},
     },
-    utils::channel::build_arc_channel,
+    utils::{channel::build_arc_channel, time::SEC_AS_MILI},
 };
 
 /// Represents a backtest environment for a trading strategy.
@@ -96,12 +96,42 @@ impl BackTest {
         }
 
         for kline in kline_data.klines() {
-            let eval_result = self.strategy.algorithm.lock().await.evaluate(kline.clone());
+            let algo_needs_trades = self.strategy.algorithm.lock().await.needs_trades();
+
+            // only get trades if needed by the algorithm
+            let trades = if algo_needs_trades {
+                let trades = match self
+                    .market
+                    .lock()
+                    .await
+                    .trade_data_range(
+                        &self.strategy.symbol,
+                        // get 5 seconds in passed to ensure all trades
+                        Some(kline.open_time - SEC_AS_MILI * 5),
+                        Some(kline.close_time),
+                        None,
+                    )
+                    .await
+                {
+                    Some(trade_data) => trade_data.trades(),
+                    None => vec![],
+                };
+                trades
+            } else {
+                vec![]
+            };
+
+            let eval_result = self
+                .strategy
+                .algorithm
+                .lock()
+                .await
+                .evaluate(kline.clone(), &trades);
 
             let order_side = match eval_result {
-                AlgorithmEvalResult::Buy => OrderSide::Buy,
-                AlgorithmEvalResult::Sell => OrderSide::Sell,
-                AlgorithmEvalResult::Ignore => {
+                AlgoEvalResult::Buy => OrderSide::Buy,
+                AlgoEvalResult::Sell => OrderSide::Sell,
+                AlgoEvalResult::Ignore => {
                     continue;
                 }
             };

@@ -4,8 +4,9 @@ use serde_json::Value;
 
 use crate::market::kline::Kline;
 
-use crate::strategy::types::AlgorithmError;
-use crate::strategy::{algorithm::Algorithm, types::AlgorithmEvalResult};
+use crate::market::trade::Trade;
+use crate::strategy::types::AlgoError;
+use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;
 
 pub struct SimpleMovingAverage {
@@ -16,9 +17,9 @@ pub struct SimpleMovingAverage {
 }
 
 impl SimpleMovingAverage {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
         let period = parse_usize_from_value("sma_period", &params.clone())
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         Ok(Self {
             data_points: vec![],
             interval,
@@ -45,7 +46,7 @@ impl SimpleMovingAverage {
 }
 
 impl Algorithm for SimpleMovingAverage {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline.clone());
 
         let result = if self.data_points.len() >= self.period {
@@ -53,12 +54,12 @@ impl Algorithm for SimpleMovingAverage {
 
             // Placeholder logic for buy/sell decision based on SMA
             if kline.close > sma {
-                AlgorithmEvalResult::Buy
+                AlgoEvalResult::Buy
             } else {
-                AlgorithmEvalResult::Sell
+                AlgoEvalResult::Sell
             }
         } else {
-            AlgorithmEvalResult::Ignore
+            AlgoEvalResult::Ignore
         };
 
         self.clean_data_points();
@@ -78,9 +79,9 @@ impl Algorithm for SimpleMovingAverage {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+    fn set_params(&mut self, params: Value) -> Result<(), AlgoError> {
         let period = parse_usize_from_value("sma_period", &params.clone())
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
 
         self.period = period;
         self.params = params;

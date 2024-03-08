@@ -1,7 +1,9 @@
+use crate::account::trade;
 use crate::market::kline::Kline;
+use crate::market::trade::Trade;
 use crate::strategy::{
     algorithm::Algorithm,
-    types::{AlgorithmError, AlgorithmEvalResult},
+    types::{AlgoError, AlgoEvalResult},
 };
 use crate::utils::number::parse_usize_from_value;
 use serde_json::Value;
@@ -16,7 +18,7 @@ pub struct BollingerBands {
 }
 
 impl BollingerBands {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
         let period = parse_usize_from_value("period", &params).unwrap_or(20); // Default period is 20
         let multiplier = parse_usize_from_value("multiplier", &params).unwrap_or(2) as f64; // Default multiplier is 2
 
@@ -72,7 +74,7 @@ impl BollingerBands {
 }
 
 impl Algorithm for BollingerBands {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline.clone());
 
         let (upper_band, _middle_band, lower_band) = self.calculate_bollinger_bands();
@@ -80,13 +82,13 @@ impl Algorithm for BollingerBands {
         // Example trading logic based on Bollinger Bands
         let result = if kline.close > upper_band {
             // Price is above the upper band - potential sell signal (overbought condition)
-            AlgorithmEvalResult::Sell
+            AlgoEvalResult::Sell
         } else if kline.close < lower_band {
             // Price is below the lower band - potential buy signal (oversold condition)
-            AlgorithmEvalResult::Buy
+            AlgoEvalResult::Buy
         } else {
             // Price is within the bands - no clear signal
-            AlgorithmEvalResult::Ignore
+            AlgoEvalResult::Ignore
         };
 
         self.clean_data_points();
@@ -94,7 +96,7 @@ impl Algorithm for BollingerBands {
         result
     }
 
-    // Implement the rest of the required methods from the Algorithm trait...
+    // Implement the rest of the required methods from the Algo trait...
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
     }
@@ -107,7 +109,7 @@ impl Algorithm for BollingerBands {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+    fn set_params(&mut self, params: Value) -> Result<(), AlgoError> {
         if let Ok(period) = parse_usize_from_value("period", &params) {
             self.period = period
         }

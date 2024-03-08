@@ -4,8 +4,9 @@ use serde_json::Value;
 
 use crate::market::kline::Kline;
 
-use crate::strategy::types::AlgorithmError;
-use crate::strategy::{algorithm::Algorithm, types::AlgorithmEvalResult};
+use crate::market::trade::Trade;
+use crate::strategy::types::AlgoError;
+use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;
 
 pub struct ThreeMaCrossover {
@@ -18,13 +19,13 @@ pub struct ThreeMaCrossover {
 }
 
 impl ThreeMaCrossover {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
         let short_period = parse_usize_from_value("short_period", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let medium_period = parse_usize_from_value("medium_period", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let long_period = parse_usize_from_value("long_period", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
 
         Ok(Self {
             data_points: vec![],
@@ -66,7 +67,7 @@ impl ThreeMaCrossover {
 }
 
 impl Algorithm for ThreeMaCrossover {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline.clone());
 
         let result = if self.data_points.len() >= self.long_period {
@@ -76,14 +77,14 @@ impl Algorithm for ThreeMaCrossover {
 
             // Placeholder logic for buy/sell decision based on MA crossovers
             if short_ma > medium_ma && medium_ma > long_ma {
-                AlgorithmEvalResult::Buy
+                AlgoEvalResult::Buy
             } else if short_ma < medium_ma && medium_ma < long_ma {
-                AlgorithmEvalResult::Sell
+                AlgoEvalResult::Sell
             } else {
-                AlgorithmEvalResult::Ignore
+                AlgoEvalResult::Ignore
             }
         } else {
-            AlgorithmEvalResult::Ignore
+            AlgoEvalResult::Ignore
         };
 
         self.clean_data_points();
@@ -103,13 +104,13 @@ impl Algorithm for ThreeMaCrossover {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+    fn set_params(&mut self, params: Value) -> Result<(), AlgoError> {
         let short_period = parse_usize_from_value("short_period", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let medium_period = parse_usize_from_value("medium_period", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let long_period = parse_usize_from_value("long_period", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
 
         self.params = params;
         self.long_period = long_period;

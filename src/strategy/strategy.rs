@@ -12,16 +12,18 @@ use crate::{
         account::Account,
         trade::{OrderSide, Position, TradeTx},
     },
+    algo::builder::AlgoBuilder,
     market::{
         kline::{self, Kline},
         market::Market,
         types::{ArcMutex, ArcSender},
     },
-    strategy::algorithm::{Algorithm, AlgorithmBuilder},
+    strategy::{
+        algorithm::Algorithm,
+        types::{AlgoError, AlgoEvalResult, FirstLastEnum, SignalMessage},
+    },
     utils::time::{floor_mili_ts, generate_ts, timestamp_to_string, MIN_AS_MILI, SEC_AS_MILI},
 };
-
-use super::types::{AlgorithmError, AlgorithmEvalResult, FirstLastEnum, SignalMessage};
 
 pub type StrategyId = Uuid;
 
@@ -61,7 +63,7 @@ impl Strategy {
     ///
     /// # Returns
     ///
-    /// A result containing the new `Strategy` instance or an `AlgorithmError` if an error occurs.
+    /// A result containing the new `Strategy` instance or an `AlgoError` if an error occurs.
 
     pub fn new(
         strategy_name: &str,
@@ -71,9 +73,8 @@ impl Strategy {
         market: ArcMutex<Market>,
         settings: StrategySettings,
         algorithm_params: Value,
-    ) -> Result<Self, AlgorithmError> {
-        let algorithm =
-            AlgorithmBuilder::build_algorithm(strategy_name, interval, algorithm_params)?;
+    ) -> Result<Self, AlgoError> {
+        let algorithm = AlgoBuilder::build_algorithm(strategy_name, interval, algorithm_params)?;
 
         Ok(Self {
             id: Uuid::new_v4(),
@@ -147,26 +148,33 @@ impl Strategy {
                 }
 
                 // get trades within the span of the kline open_time and close_time
-                let trades = match &kline {
-                    Some(kline) => {
-                        let trades = match market
-                            .lock()
-                            .await
-                            .trade_data_range(
-                                &symbol,
-                                // get 5 seconds in passed to ensure all trades
-                                Some(kline.open_time - SEC_AS_MILI * 5),
-                                Some(kline.close_time),
-                                None,
-                            )
-                            .await
-                        {
-                            Some(trade_data) => Some(trade_data.trades()),
-                            None => None,
-                        };
-                        trades
+                let algo_needs_trades = algorithm.lock().await.needs_trades();
+
+                // only get trades if needed by the algorithm
+                let trades = if algo_needs_trades {
+                    match &kline {
+                        Some(kline) => {
+                            let trades = match market
+                                .lock()
+                                .await
+                                .trade_data_range(
+                                    &symbol,
+                                    // get 5 seconds in passed to ensure all trades
+                                    Some(kline.open_time - SEC_AS_MILI * 5),
+                                    Some(kline.close_time),
+                                    None,
+                                )
+                                .await
+                            {
+                                Some(trade_data) => trade_data.trades(),
+                                None => vec![],
+                            };
+                            trades
+                        }
+                        None => vec![],
                     }
-                    None => None,
+                } else {
+                    vec![]
                 };
 
                 if let Some(kline) = kline {
@@ -174,12 +182,12 @@ impl Strategy {
                     // Main evaluation done here
                     // ---
                     info!("Trades to be passed into evaluate method, {:?}", trades);
-                    let order_side = algorithm.lock().await.evaluate(kline.clone());
+                    let order_side = algorithm.lock().await.evaluate(kline.clone(), &trades);
 
                     let order_side = match order_side {
-                        AlgorithmEvalResult::Buy => OrderSide::Buy,
-                        AlgorithmEvalResult::Sell => OrderSide::Sell,
-                        AlgorithmEvalResult::Ignore => {
+                        AlgoEvalResult::Buy => OrderSide::Buy,
+                        AlgoEvalResult::Sell => OrderSide::Sell,
+                        AlgoEvalResult::Ignore => {
                             continue;
                         }
                     };
@@ -303,7 +311,7 @@ impl Strategy {
     ///
     /// The current parameters of the algorithm as a JSON `Value`.
 
-    pub async fn get_algorithm_params(&self) -> Value {
+    pub async fn get_algorithm_params(&self) -> impl Serialize {
         self.algorithm.lock().await.get_params().clone()
     }
 
@@ -315,9 +323,9 @@ impl Strategy {
     ///
     /// # Returns
     ///
-    /// A result indicating success or containing an `AlgorithmError`.
+    /// A result indicating success or containing an `AlgoError`.
 
-    pub async fn set_algorithm_params(&self, params: Value) -> Result<(), AlgorithmError> {
+    pub async fn set_algorithm_params(&self, params: Value) -> Result<(), AlgoError> {
         self.algorithm.lock().await.set_params(params)
     }
 

@@ -1,7 +1,8 @@
 use crate::market::kline::Kline;
+use crate::market::trade::Trade;
 use crate::strategy::{
     algorithm::Algorithm,
-    types::{AlgorithmError, AlgorithmEvalResult},
+    types::{AlgoError, AlgoEvalResult},
 };
 use crate::utils::number::parse_usize_from_value;
 use serde_json::Value;
@@ -21,7 +22,7 @@ pub struct MacdBollingerBands {
 }
 
 impl MacdBollingerBands {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
         let bollinger_period = params
             .get("bollinger_period")
             .and_then(Value::as_u64)
@@ -107,7 +108,7 @@ impl MacdBollingerBands {
 }
 
 impl Algorithm for MacdBollingerBands {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline.clone());
 
         let (upper_band, _, lower_band) = self.calculate_bollinger_bands();
@@ -120,15 +121,15 @@ impl Algorithm for MacdBollingerBands {
 
             if price < lower_band && latest_macd > latest_signal {
                 // Buy signal: price below lower Bollinger Band and MACD crosses above signal line
-                AlgorithmEvalResult::Buy
+                AlgoEvalResult::Buy
             } else if price > upper_band && latest_macd < latest_signal {
                 // Sell signal: price above upper Bollinger Band and MACD crosses below signal line
-                AlgorithmEvalResult::Sell
+                AlgoEvalResult::Sell
             } else {
-                AlgorithmEvalResult::Ignore
+                AlgoEvalResult::Ignore
             }
         } else {
-            AlgorithmEvalResult::Ignore
+            AlgoEvalResult::Ignore
         };
 
         self.clean_data_points();
@@ -148,7 +149,7 @@ impl Algorithm for MacdBollingerBands {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+    fn set_params(&mut self, params: Value) -> Result<(), AlgoError> {
         if let Ok(bollinger_period) = parse_usize_from_value("bollinger_period", &params) {
             self.bollinger_period = bollinger_period
         }

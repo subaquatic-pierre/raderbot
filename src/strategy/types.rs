@@ -1,8 +1,8 @@
 use std::fmt::{self};
 
-use serde::{Deserialize, Serialize};
-
 use crate::account::trade::OrderSide;
+use serde::{Deserialize, Serialize};
+use serde_json::Error as SerdeJsonError;
 
 use super::strategy::StrategyId;
 
@@ -26,7 +26,7 @@ pub struct SignalMessage {
 ///
 /// This can indicate a recommendation to enter a long position, enter a short position, or to make no trade (ignore).
 
-pub enum AlgorithmEvalResult {
+pub enum AlgoEvalResult {
     Buy,
     Sell,
     Ignore,
@@ -46,22 +46,30 @@ pub enum FirstLastEnum {
 /// Covers scenarios such as unrecognized strategy names, unsupported intervals for analysis, and improperly configured parameters.
 
 #[derive(Debug)]
-pub enum AlgorithmError {
+pub enum AlgoError {
     UnkownName(String),
     UnknownInterval(String),
     InvalidParams(String),
+    SerdeJsonError(SerdeJsonError),
 }
 
-/// Implements display formatting for `AlgorithmError`, providing clearer error descriptions.
+impl From<SerdeJsonError> for AlgoError {
+    fn from(err: SerdeJsonError) -> Self {
+        AlgoError::SerdeJsonError(err)
+    }
+}
+
+/// Implements display formatting for `AlgoError`, providing clearer error descriptions.
 ///
 /// This method formats different types of algorithm errors into human-readable strings, enhancing error reporting and debugging.
 
-impl fmt::Display for AlgorithmError {
+impl fmt::Display for AlgoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AlgorithmError::UnkownName(msg) => write!(f, "Unknown Name error: {}", msg),
-            AlgorithmError::UnknownInterval(msg) => write!(f, "Unknown Interval error: {}", msg),
-            AlgorithmError::InvalidParams(msg) => write!(f, "Invalid Params error: {}", msg),
+            AlgoError::UnkownName(msg) => write!(f, "Unknown Name error: {}", msg),
+            AlgoError::UnknownInterval(msg) => write!(f, "Unknown Interval error: {}", msg),
+            AlgoError::InvalidParams(msg) => write!(f, "Invalid Params error: {}", msg),
+            AlgoError::SerdeJsonError(msg) => write!(f, "Invalid Params error: {}", msg),
         }
     }
 }

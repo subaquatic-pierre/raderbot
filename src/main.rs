@@ -24,7 +24,7 @@ use api::{
 
 #[allow(unused_must_use)]
 mod account;
-mod algorithm;
+mod algo;
 mod api;
 mod app;
 mod bot;

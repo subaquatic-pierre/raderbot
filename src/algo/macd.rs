@@ -1,7 +1,8 @@
 use crate::market::kline::Kline;
+use crate::market::trade::Trade;
 use crate::strategy::{
     algorithm::Algorithm,
-    types::{AlgorithmError, AlgorithmEvalResult},
+    types::{AlgoError, AlgoEvalResult},
 };
 use crate::utils::number::parse_usize_from_value;
 use serde_json::Value;
@@ -19,7 +20,7 @@ pub struct Macd {
 }
 
 impl Macd {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
         // Extract parameters or set to default values
         let short_ema_period = params
             .get("short_ema_period")
@@ -80,7 +81,7 @@ impl Macd {
 }
 
 impl Algorithm for Macd {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline);
         self.update_macd_and_signal_lines();
 
@@ -89,15 +90,15 @@ impl Algorithm for Macd {
         {
             if latest_macd > latest_signal {
                 // MACD line crosses above the signal line, potential buy signal
-                AlgorithmEvalResult::Buy
+                AlgoEvalResult::Buy
             } else if latest_macd < latest_signal {
                 // MACD line crosses below the signal line, potential sell signal
-                AlgorithmEvalResult::Sell
+                AlgoEvalResult::Sell
             } else {
-                AlgorithmEvalResult::Ignore
+                AlgoEvalResult::Ignore
             }
         } else {
-            AlgorithmEvalResult::Ignore
+            AlgoEvalResult::Ignore
         };
 
         self.clean_data_points();
@@ -117,7 +118,7 @@ impl Algorithm for Macd {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+    fn set_params(&mut self, params: Value) -> Result<(), AlgoError> {
         if let Ok(short_ema_period) = parse_usize_from_value("short_ema_period", &params) {
             self.short_ema_period = short_ema_period
         }

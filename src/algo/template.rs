@@ -1,28 +1,36 @@
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::market::kline::Kline;
 
-use crate::strategy::types::AlgorithmError;
-use crate::strategy::{algorithm::Algorithm, types::AlgorithmEvalResult};
+use crate::market::trade::Trade;
+use crate::strategy::types::AlgoError;
+use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;
 
-pub struct CustomAlgorithm {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CustomAlgoParams {
+    // Add fields that will be serialized from the params Value here
+    custom_param: Option<usize>,
+}
+
+pub struct CustomAlgo {
     data_points: Vec<Kline>,
     interval: Duration,
     custom_param: usize,
     params: Value,
 }
 
-impl CustomAlgorithm {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
-        let custom_param = parse_usize_from_value("custom_param", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+impl CustomAlgo {
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+        let custom_params: CustomAlgoParams = serde_json::from_value(params.clone())?;
+
         Ok(Self {
             data_points: vec![],
             interval,
-            custom_param,
+            custom_param: custom_params.custom_param.unwrap_or(42),
             params,
         })
     }
@@ -36,8 +44,8 @@ impl CustomAlgorithm {
     // }
 }
 
-impl Algorithm for CustomAlgorithm {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+impl Algorithm for CustomAlgo {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline.clone());
 
         // Example logic using self.custom_param
@@ -45,7 +53,7 @@ impl Algorithm for CustomAlgorithm {
 
         self.clean_data_points();
 
-        AlgorithmEvalResult::Ignore
+        AlgoEvalResult::Ignore
     }
 
     fn interval(&self) -> Duration {
@@ -56,7 +64,7 @@ impl Algorithm for CustomAlgorithm {
         &self.params
     }
 
-    fn set_params(&mut self, _params: Value) -> Result<(), AlgorithmError> {
+    fn set_params(&mut self, _params: Value) -> Result<(), AlgoError> {
         unimplemented!()
     }
 
@@ -73,7 +81,7 @@ impl Algorithm for CustomAlgorithm {
 // Examples below
 // ---
 
-// enum AlgorithmEvalResult {
+// enum AlgoEvalResult {
 //     Buy,
 //     Sell,
 //     Ignore,

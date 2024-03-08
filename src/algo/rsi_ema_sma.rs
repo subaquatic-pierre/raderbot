@@ -1,9 +1,21 @@
 use crate::market::kline::Kline;
-use crate::strategy::types::AlgorithmError;
-use crate::strategy::{algorithm::Algorithm, types::AlgorithmEvalResult};
+use crate::market::trade::Trade;
+use crate::strategy::types::AlgoError;
+use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
+use serde_json::{self, Value};
 use std::time::Duration;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RsiEmaSmaParams {
+    // Add fields that will be serialized from the params Value here
+    rsi_period: Option<usize>,
+    short_sma_period: Option<usize>,
+    medium_sma_period: Option<usize>,
+    long_sma_period: Option<usize>,
+    ema_period: Option<usize>,
+}
 
 pub struct RsiEmaSma {
     data_points: Vec<Kline>,
@@ -18,12 +30,14 @@ pub struct RsiEmaSma {
 }
 
 impl RsiEmaSma {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
-        let rsi_period = parse_usize_from_value("rsi_period", &params).unwrap_or(14);
-        let short_sma_period = parse_usize_from_value("short_sma_period", &params).unwrap_or(5);
-        let medium_sma_period = parse_usize_from_value("medium_sma_period", &params).unwrap_or(12);
-        let long_sma_period = parse_usize_from_value("long_sma_period", &params).unwrap_or(26);
-        let ema_period = parse_usize_from_value("ema_period", &params).unwrap_or(9);
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+        let rsi_ema_sma_params: RsiEmaSmaParams = serde_json::from_value(params.clone())?;
+
+        let rsi_period = rsi_ema_sma_params.rsi_period.unwrap_or(14);
+        let short_sma_period = rsi_ema_sma_params.short_sma_period.unwrap_or(5);
+        let medium_sma_period = rsi_ema_sma_params.medium_sma_period.unwrap_or(12);
+        let long_sma_period = rsi_ema_sma_params.long_sma_period.unwrap_or(26);
+        let ema_period = rsi_ema_sma_params.ema_period.unwrap_or(9);
 
         Ok(Self {
             data_points: Vec::new(),
@@ -100,7 +114,7 @@ impl RsiEmaSma {
 }
 
 impl Algorithm for RsiEmaSma {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline);
 
         let rsi = self.calculate_rsi();
@@ -114,11 +128,11 @@ impl Algorithm for RsiEmaSma {
             && medium_sma > long_sma
             && short_sma > ema
         {
-            AlgorithmEvalResult::Buy
+            AlgoEvalResult::Buy
         } else if rsi > 70.0 && short_sma < medium_sma && medium_sma < long_sma && short_sma < ema {
-            AlgorithmEvalResult::Sell
+            AlgoEvalResult::Sell
         } else {
-            AlgorithmEvalResult::Ignore
+            AlgoEvalResult::Ignore
         };
 
         self.clean_data_points();
@@ -139,16 +153,20 @@ impl Algorithm for RsiEmaSma {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
-        let rsi_period = parse_usize_from_value("rsi_period", &params).unwrap_or(self.rsi_period); // Default to 14 if not specified
+    fn set_params(&mut self, params: Value) -> Result<(), AlgoError> {
+        let rsi_ema_sma_params: RsiEmaSmaParams = serde_json::from_value(params.clone())?;
 
-        let short_sma_period =
-            parse_usize_from_value("short_sma_period", &params).unwrap_or(self.short_sma_period);
-        let medium_sma_period =
-            parse_usize_from_value("medium_sma_period", &params).unwrap_or(self.medium_sma_period);
-        let long_sma_period =
-            parse_usize_from_value("long_sma_period", &params).unwrap_or(self.long_sma_period);
-        let ema_period = parse_usize_from_value("ema_period", &params).unwrap_or(9);
+        let rsi_period = rsi_ema_sma_params.rsi_period.unwrap_or(self.rsi_period);
+        let short_sma_period = rsi_ema_sma_params
+            .short_sma_period
+            .unwrap_or(self.short_sma_period);
+        let medium_sma_period = rsi_ema_sma_params
+            .medium_sma_period
+            .unwrap_or(self.medium_sma_period);
+        let long_sma_period = rsi_ema_sma_params
+            .long_sma_period
+            .unwrap_or(self.long_sma_period);
+        let ema_period = rsi_ema_sma_params.ema_period.unwrap_or(self.ema_period);
 
         self.rsi_period = rsi_period;
         self.short_sma_period = short_sma_period;

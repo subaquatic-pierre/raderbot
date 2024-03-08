@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use crate::market::kline::Kline;
 
-use crate::strategy::types::AlgorithmError;
-use crate::strategy::{algorithm::Algorithm, types::AlgorithmEvalResult};
+use crate::market::trade::Trade;
+use crate::strategy::types::AlgoError;
+use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;
 use ta::indicators::{ExponentialMovingAverage, SimpleMovingAverage};
 
@@ -25,16 +26,16 @@ pub struct EmaSmaCrossover {
 }
 
 impl EmaSmaCrossover {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
         let ema_period = parse_usize_from_value("ema_period", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let sma_period = parse_usize_from_value("sma_period", &params)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
 
         let ema = ExponentialMovingAverage::new(ema_period)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let sma = SimpleMovingAverage::new(sma_period)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
 
         Ok(Self {
             data_points: vec![],
@@ -57,7 +58,7 @@ impl EmaSmaCrossover {
 }
 
 impl Algorithm for EmaSmaCrossover {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline.clone());
 
         let result = if self.data_points.len() >= self.sma_period {
@@ -66,19 +67,19 @@ impl Algorithm for EmaSmaCrossover {
 
             // EMA crossover signal
             let result = if ema > sma {
-                AlgorithmEvalResult::Buy
+                AlgoEvalResult::Buy
             } else if ema < sma {
-                AlgorithmEvalResult::Sell
+                AlgoEvalResult::Sell
             } else if kline.close > sma {
-                AlgorithmEvalResult::Buy
+                AlgoEvalResult::Buy
             } else if kline.close < sma {
-                AlgorithmEvalResult::Sell
+                AlgoEvalResult::Sell
             } else {
-                AlgorithmEvalResult::Ignore
+                AlgoEvalResult::Ignore
             };
             result
         } else {
-            AlgorithmEvalResult::Ignore
+            AlgoEvalResult::Ignore
         };
 
         self.clean_data_points();
@@ -98,16 +99,16 @@ impl Algorithm for EmaSmaCrossover {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
+    fn set_params(&mut self, params: Value) -> Result<(), AlgoError> {
         let ema_period = parse_usize_from_value("ema_period", &params.clone())
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let sma_period = parse_usize_from_value("sma_period", &params.clone())
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
 
         let ema = ExponentialMovingAverage::new(ema_period)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let sma = SimpleMovingAverage::new(sma_period)
-            .or_else(|e| Err(AlgorithmError::InvalidParams(e.to_string())))?;
+            .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
 
         self.params = params;
         self.ema = ema;

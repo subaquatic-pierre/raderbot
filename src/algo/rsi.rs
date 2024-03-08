@@ -1,9 +1,17 @@
 use crate::market::kline::Kline;
-use crate::strategy::types::AlgorithmError;
-use crate::strategy::{algorithm::Algorithm, types::AlgorithmEvalResult};
+use crate::market::trade::Trade;
+use crate::strategy::types::AlgoError;
+use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RsiParams {
+    // Add fields that will be serialized from the params Value here
+    rsi_period: Option<usize>,
+}
 
 pub struct Rsi {
     data_points: Vec<Kline>,
@@ -14,8 +22,11 @@ pub struct Rsi {
 }
 
 impl Rsi {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgorithmError> {
-        let rsi_period = parse_usize_from_value("rsi_period", &params).unwrap_or(14); // Default to 14 if not specified
+    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+        let rsi_params: RsiParams = serde_json::from_value(params.clone())?;
+
+        let rsi_period = rsi_params.rsi_period.unwrap_or(14);
+
         Ok(Self {
             data_points: vec![],
             interval,
@@ -59,18 +70,18 @@ impl Rsi {
 }
 
 impl Algorithm for Rsi {
-    fn evaluate(&mut self, kline: Kline) -> AlgorithmEvalResult {
+    fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         self.data_points.push(kline);
 
         let rsi = self.calculate_rsi();
 
         // Example RSI logic: Buy if RSI < 30 (oversold), Sell if RSI > 70 (overbought), else Ignore
         let result = if rsi < 30.0 {
-            AlgorithmEvalResult::Buy
+            AlgoEvalResult::Buy
         } else if rsi > 70.0 {
-            AlgorithmEvalResult::Sell
+            AlgoEvalResult::Sell
         } else {
-            AlgorithmEvalResult::Ignore
+            AlgoEvalResult::Ignore
         };
 
         self.clean_data_points();
@@ -90,8 +101,10 @@ impl Algorithm for Rsi {
         &self.params
     }
 
-    fn set_params(&mut self, params: Value) -> Result<(), AlgorithmError> {
-        let rsi_period = parse_usize_from_value("rsi_period", &params).unwrap_or(self.rsi_period);
+    fn set_params(&mut self, params: Value) -> Result<(), AlgoError> {
+        let rsi_params: RsiParams = serde_json::from_value(params.clone())?;
+
+        let rsi_period = rsi_params.rsi_period.unwrap_or(self.rsi_period);
 
         self.rsi_period = rsi_period;
         self.params = params;
