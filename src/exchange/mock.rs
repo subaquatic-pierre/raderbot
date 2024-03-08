@@ -2,6 +2,7 @@ use crate::account::trade::{OrderSide, Position, TradeTx};
 use crate::exchange::api::ExchangeApi;
 use crate::exchange::stream::StreamManager;
 use crate::exchange::types::{ApiResult, StreamType};
+use crate::market::interval::Interval;
 use crate::market::kline::Kline;
 use crate::market::ticker::Ticker;
 use crate::market::types::ArcMutex;
@@ -110,7 +111,7 @@ impl ExchangeApi for MockExchangeApi {
     fn get_stream_manager(&self) -> ArcMutex<Box<dyn StreamManager>> {
         unimplemented!()
     }
-    async fn get_kline(&self, _symbol: &str, _interval: &str) -> ApiResult<Kline> {
+    async fn get_kline(&self, _symbol: &str, _interval: Interval) -> ApiResult<Kline> {
         unimplemented!()
     }
     async fn get_ticker(&self, _symbol: &str) -> ApiResult<Ticker> {
@@ -121,7 +122,7 @@ impl ExchangeApi for MockExchangeApi {
         &self,
         _symbol: &str,
         _stream_type: StreamType,
-        _interval: Option<&str>,
+        _interval: Option<Interval>,
     ) -> String {
         todo!()
     }

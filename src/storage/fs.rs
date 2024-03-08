@@ -12,6 +12,7 @@ use std::io::Write;
 use std::io::{self};
 use std::path::{Path, PathBuf};
 
+use crate::market::interval::Interval;
 use crate::market::kline::Kline;
 use crate::market::trade::Trade;
 use crate::strategy::strategy::{StrategyId, StrategyInfo, StrategySummary};
@@ -314,7 +315,7 @@ impl StorageManager for FsStorage {
     async fn get_klines(
         &self,
         symbol: &str,
-        interval: &str,
+        interval: Interval,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
     ) -> Vec<Kline> {

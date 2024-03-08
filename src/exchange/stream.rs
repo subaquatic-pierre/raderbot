@@ -4,7 +4,10 @@ use serde::Serialize;
 
 use async_trait::async_trait;
 
-use crate::{exchange::types::StreamType, market::types::ArcMutex, utils::time::generate_ts};
+use crate::{
+    exchange::types::StreamType, market::interval::Interval, market::types::ArcMutex,
+    utils::time::generate_ts,
+};
 
 use super::types::ApiResult;
 
@@ -85,7 +88,7 @@ pub struct StreamMeta {
     /// The symbol associated with the stream.
     pub symbol: String,
     /// The interval of the stream, if applicable.
-    pub interval: Option<String>,
+    pub interval: Option<Interval>,
 }
 
 impl StreamMeta {
@@ -107,7 +110,7 @@ impl StreamMeta {
         url: &str,
         symbol: &str,
         stream_type: StreamType,
-        interval: Option<String>,
+        interval: Option<Interval>,
     ) -> Self {
         Self {
             id: id.to_string(),
@@ -145,7 +148,11 @@ impl Default for StreamMeta {
 /// # Returns
 ///
 /// Returns the ID of the stream.
-pub fn build_stream_id(symbol: &str, stream_type: StreamType, interval: Option<&str>) -> String {
+pub fn build_stream_id(
+    symbol: &str,
+    stream_type: StreamType,
+    interval: Option<Interval>,
+) -> String {
     match stream_type {
         StreamType::Kline => {
             if let Some(interval) = interval {

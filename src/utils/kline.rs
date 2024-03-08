@@ -5,7 +5,10 @@ use uuid::Uuid;
 use std::fs::File;
 
 use crate::{
-    market::kline::{BinanceKline, Kline},
+    market::{
+        interval::Interval,
+        kline::{BinanceKline, Kline},
+    },
     utils::{csv::has_header, time::timestamp_to_datetime},
 };
 use csv::Reader;
@@ -29,7 +32,7 @@ use csv::Reader;
 pub fn load_binance_klines(
     file_path: std::path::PathBuf,
     symbol: &str,
-    interval: &str,
+    interval: Interval,
 ) -> Vec<Kline> {
     let filepath_str = file_path.as_os_str().to_str().unwrap();
     info!("Loading klines from file: {filepath_str}");
@@ -69,7 +72,7 @@ pub fn load_binance_klines(
 
         let kline = Kline {
             symbol: symbol.to_string(),
-            interval: interval.to_string(),
+            interval: interval,
             open_time: binance_kline.open_time,
             open: binance_kline.open,
             high: binance_kline.high,
@@ -187,7 +190,7 @@ pub fn get_min_max_open_time(klines: &[Kline]) -> (u64, u64) {
     (min_time, max_time)
 }
 
-pub fn build_kline_key(symbol: &str, interval: &str) -> String {
+pub fn build_kline_key(symbol: &str, interval: Interval) -> String {
     format!("{}@kline_{}", symbol, interval)
 }
 

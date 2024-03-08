@@ -1,7 +1,7 @@
 use super::manager::StorageManager;
 use crate::{
     account::trade::OrderSide,
-    market::{kline::Kline, trade::Trade},
+    market::{interval::Interval, kline::Kline, trade::Trade},
     strategy::strategy::{StrategyId, StrategyInfo, StrategySummary},
     utils::{
         bson::{build_bson_kline_meta, build_bson_trade_meta},
@@ -125,7 +125,7 @@ impl StorageManager for MongoDbStorage {
     async fn get_klines(
         &self,
         symbol: &str,
-        interval: &str,
+        interval: Interval,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
     ) -> Vec<Kline> {
@@ -140,7 +140,7 @@ impl StorageManager for MongoDbStorage {
 
         let mut query = doc! {
             "symbol": symbol,
-            "interval": interval,
+            "interval": interval.to_string(),
         };
 
         if let Some(from_ts) = from_ts {
@@ -412,7 +412,7 @@ impl From<Kline> for BsonKline {
         BsonKline {
             metadata: build_bson_kline_meta(&kline).to_string(),
             symbol: kline.symbol,
-            interval: kline.interval,
+            interval: kline.interval.to_string(),
             open: kline.open,
             high: kline.high,
             low: kline.low,
@@ -428,7 +428,11 @@ impl From<BsonKline> for Kline {
     fn from(bson_kline: BsonKline) -> Self {
         Kline {
             symbol: bson_kline.symbol,
-            interval: bson_kline.interval,
+            interval: bson_kline
+                .interval
+                .try_into()
+                .map_err(|e| Interval::Invalid)
+                .unwrap(),
             open: bson_kline.open,
             high: bson_kline.high,
             low: bson_kline.low,

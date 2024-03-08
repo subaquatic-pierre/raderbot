@@ -19,7 +19,6 @@ pub struct RsiEmaSmaParams {
 
 pub struct RsiEmaSma {
     data_points: Vec<Kline>,
-    interval: Duration,
     params: Value,
     rsi_period: usize,
     short_sma_period: usize,
@@ -30,7 +29,7 @@ pub struct RsiEmaSma {
 }
 
 impl RsiEmaSma {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let rsi_ema_sma_params: RsiEmaSmaParams = serde_json::from_value(params.clone())?;
 
         let rsi_period = rsi_ema_sma_params.rsi_period.unwrap_or(14);
@@ -41,7 +40,6 @@ impl RsiEmaSma {
 
         Ok(Self {
             data_points: Vec::new(),
-            interval,
             params,
             rsi_period,
             short_sma_period,
@@ -143,10 +141,6 @@ impl Algorithm for RsiEmaSma {
     // Implement the rest of the required methods from the Algorithm trait...
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

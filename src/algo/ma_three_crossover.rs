@@ -11,7 +11,6 @@ use crate::utils::number::parse_usize_from_value;
 
 pub struct ThreeMaCrossover {
     data_points: Vec<Kline>,
-    interval: Duration,
     short_period: usize,
     medium_period: usize,
     long_period: usize,
@@ -19,7 +18,7 @@ pub struct ThreeMaCrossover {
 }
 
 impl ThreeMaCrossover {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let short_period = parse_usize_from_value("short_period", &params)
             .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let medium_period = parse_usize_from_value("medium_period", &params)
@@ -29,7 +28,6 @@ impl ThreeMaCrossover {
 
         Ok(Self {
             data_points: vec![],
-            interval,
             short_period,
             medium_period,
             long_period,
@@ -94,10 +92,6 @@ impl Algorithm for ThreeMaCrossover {
 
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

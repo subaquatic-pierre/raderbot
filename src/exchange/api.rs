@@ -7,6 +7,7 @@ use std::{error::Error, fmt};
 
 use crate::{
     account::trade::{OrderSide, Position, TradeTx},
+    market::interval::Interval,
     market::{kline::Kline, ticker::Ticker, types::ArcMutex},
 };
 
@@ -142,7 +143,7 @@ pub trait ExchangeApi: Send + Sync {
     ///
     /// A `Result` containing the k-line as `Kline` if successful, or an `ApiError` otherwise.
 
-    async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline>;
+    async fn get_kline(&self, symbol: &str, interval: Interval) -> ApiResult<Kline>;
 
     /// Retrieves the ticker information for a specific symbol.
     ///
@@ -180,7 +181,7 @@ pub trait ExchangeApi: Send + Sync {
         &self,
         symbol: &str,
         stream_type: StreamType,
-        interval: Option<&str>,
+        interval: Option<Interval>,
     ) -> String;
 }
 

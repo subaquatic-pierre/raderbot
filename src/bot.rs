@@ -9,6 +9,7 @@ use crate::{
     account::account::Account,
     exchange::{api::ExchangeApi, binance::BinanceApi, bingx::BingXApi, mock::MockExchangeApi},
     market::{
+        interval::Interval,
         market::Market,
         messages::MarketMessage,
         types::{ArcMutex, ArcReceiver, ArcSender},
@@ -146,7 +147,6 @@ impl RaderBot {
         &mut self,
         strategy_name: &str,
         symbol: &str,
-        interval: &str,
         settings: StrategySettings,
         algorithm_params: Value,
     ) -> Result<StrategyInfo, AlgoError> {
@@ -156,7 +156,6 @@ impl RaderBot {
         let mut strategy = Strategy::new(
             strategy_name,
             symbol,
-            interval,
             strategy_tx,
             market.clone(),
             settings,
@@ -230,17 +229,16 @@ impl RaderBot {
         &mut self,
         strategy_name: &str,
         symbol: &str,
-        interval: &str,
         from_ts: u64,
         to_ts: u64,
         settings: StrategySettings,
         algorithm_params: Value,
     ) -> Result<StrategySummary, AlgoError> {
+        let interval = settings.interval.clone();
         let strategy_tx = self.strategy_tx.clone();
         let strategy = Strategy::new(
             strategy_name,
             symbol,
-            interval,
             strategy_tx,
             self.market.clone(),
             settings,
@@ -256,7 +254,7 @@ impl RaderBot {
             .clone()
             .lock()
             .await
-            .kline_data_range(&symbol, &interval, Some(from_ts), Some(to_ts), None)
+            .kline_data_range(&symbol, interval, Some(from_ts), Some(to_ts), None)
             .await
         {
             back_test.run(kline_data).await;

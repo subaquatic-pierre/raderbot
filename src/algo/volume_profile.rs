@@ -11,18 +11,16 @@ use crate::utils::number::parse_usize_from_value;
 
 pub struct VolumeProfile {
     data_points: Vec<Kline>,
-    interval: Duration,
     custom_param: usize,
     params: Value,
 }
 
 impl VolumeProfile {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let custom_param = parse_usize_from_value("custom_param", &params)
             .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         Ok(Self {
             data_points: vec![],
-            interval,
             custom_param,
             params,
         })
@@ -49,10 +47,6 @@ impl Algorithm for VolumeProfile {
         AlgoEvalResult::Ignore
     }
 
-    fn interval(&self) -> Duration {
-        self.interval
-    }
-
     fn get_params(&self) -> &Value {
         &self.params
     }
@@ -64,6 +58,7 @@ impl Algorithm for VolumeProfile {
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
     }
+
     fn clean_data_points(&mut self) {
         unimplemented!()
     }

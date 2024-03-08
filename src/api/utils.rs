@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::app::AppState;
+use crate::market::interval::Interval;
 use crate::utils::crypt::sign_hmac;
 use crate::utils::kline::{
     build_kline_filename, build_kline_key, interval_symbol_from_binance_filename,
@@ -81,11 +82,13 @@ async fn load_klines(
                 .to_string_lossy()
                 .into_owned();
 
-            let (symbol, interval) = interval_symbol_from_binance_filename(&file_name);
+            let (symbol, str_interval) = interval_symbol_from_binance_filename(&file_name);
 
-            let kline_key = build_kline_key(&symbol, &interval);
+            let interval = str_interval.try_into().unwrap_or(Interval::Invalid);
 
-            let klines = load_binance_klines(entry.path(), &symbol, &interval);
+            let kline_key = build_kline_key(&symbol, interval);
+
+            let klines = load_binance_klines(entry.path(), &symbol, interval);
 
             if let Err(e) = storage_manager.save_klines(&klines, &kline_key, true).await {
                 info!("Unable to save klines: {e}");
@@ -181,7 +184,7 @@ async fn time_difference(
 #[derive(Debug, Deserialize)]
 struct CalculateOpenTimeParams {
     close_time: String,
-    interval: String,
+    interval: Interval,
 }
 #[post("/calculate-open-time")]
 async fn calculate_open_time(
@@ -191,7 +194,7 @@ async fn calculate_open_time(
     // let params = web::Query::<CalculateOpenTimeParams>::from_query(req.query_string()).unwrap();
 
     let open_time =
-        calculate_kline_open_time(body.close_time.parse::<u64>().unwrap(), &body.interval);
+        calculate_kline_open_time(body.close_time.parse::<u64>().unwrap(), body.interval);
 
     // Return the stream data as JSON
     let json_data = json!({ "open_time": open_time });

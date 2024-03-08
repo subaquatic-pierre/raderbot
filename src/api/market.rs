@@ -12,13 +12,14 @@ use serde_json::json;
 use crate::exchange::types::StreamType;
 
 use crate::app::AppState;
+use crate::market::interval::Interval;
 use crate::market::volume::{PriceVolume, TimeVolume, TradeVolume};
 use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]
 pub struct GetKlineDataParams {
     symbol: String,
-    interval: String,
+    interval: Interval,
 }
 #[post("/kline-data")]
 async fn get_kline_data(
@@ -30,7 +31,7 @@ async fn get_kline_data(
     let kline_data = market
         .lock()
         .await
-        .last_kline(&body.symbol, &body.interval)
+        .last_kline(&body.symbol, body.interval)
         .await;
 
     if let Some(kline_data) = kline_data {
@@ -197,7 +198,7 @@ async fn get_volume_data(
 #[derive(Debug, Deserialize)]
 pub struct GetKlineDataRangeParams {
     symbol: String,
-    interval: String,
+    interval: Interval,
     from_ts: Option<String>,
     to_ts: Option<String>,
     limit: Option<usize>,
@@ -235,7 +236,7 @@ async fn get_kline_data_range(
     let kline_data = market
         .lock()
         .await
-        .kline_data_range(&body.symbol, &body.interval, from_ts, to_ts, body.limit)
+        .kline_data_range(&body.symbol, body.interval, from_ts, to_ts, body.limit)
         .await;
 
     if let Some(kline_data) = kline_data {
@@ -324,7 +325,7 @@ async fn close_stream(
 pub struct OpenStreamParams {
     stream_type: StreamType,
     symbol: String,
-    interval: Option<String>,
+    interval: Option<Interval>,
 }
 #[post("/open-stream")]
 async fn open_stream(
@@ -339,11 +340,10 @@ async fn open_stream(
 
     let stream_id = match stream_type {
         StreamType::Kline => {
-            let interval = body.interval.clone().unwrap().to_string();
             market
                 .lock()
                 .await
-                .open_stream(stream_type, &symbol, Some(&interval))
+                .open_stream(stream_type, &symbol, body.interval)
                 .await
         }
         StreamType::Ticker => {

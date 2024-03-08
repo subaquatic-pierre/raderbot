@@ -1,3 +1,4 @@
+pub mod interval;
 pub mod kline;
 pub mod market;
 pub mod messages;

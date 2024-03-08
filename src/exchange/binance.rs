@@ -20,6 +20,7 @@ use sha2::Sha256;
 use crate::account::trade::{OrderSide, Position, TradeTx};
 use crate::exchange::api::{ExchangeApi, QueryStr};
 use crate::exchange::types::ArcEsStreamSync;
+use crate::market::interval::Interval;
 use crate::market::messages::MarketMessage;
 use crate::market::trade::Trade;
 use crate::market::types::{ArcMutex, ArcSender};
@@ -360,7 +361,7 @@ impl ExchangeApi for BinanceApi {
     ///
     /// Returns an `ApiResult<Kline>`, encapsulating the latest k-line data. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
 
-    async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline> {
+    async fn get_kline(&self, symbol: &str, interval: Interval) -> ApiResult<Kline> {
         let format_symbol = BinanceApi::format_binance_symbol(symbol, false);
         let endpoint =
             format!("/fapi/v1/klines?symbol={format_symbol}&interval={interval}&limit=1");
@@ -397,7 +398,7 @@ impl ExchangeApi for BinanceApi {
         let close_time = arr[0][6].as_u64().unwrap();
 
         Ok(Kline {
-            interval: interval.to_string(),
+            interval,
             symbol: symbol.to_string(),
             open_time,
             open,
@@ -529,7 +530,7 @@ impl ExchangeApi for BinanceApi {
         &self,
         symbol: &str,
         stream_type: StreamType,
-        interval: Option<&str>,
+        interval: Option<Interval>,
     ) -> String {
         let url = match stream_type {
             StreamType::Kline => {

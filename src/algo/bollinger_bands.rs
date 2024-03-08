@@ -11,20 +11,18 @@ use std::time::Duration;
 
 pub struct BollingerBands {
     data_points: Vec<Kline>,
-    interval: Duration,
     params: Value,
     period: usize,
     multiplier: f64, // Typically, the multiplier is set to 2 for the standard deviation calculation.
 }
 
 impl BollingerBands {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let period = parse_usize_from_value("period", &params).unwrap_or(20); // Default period is 20
         let multiplier = parse_usize_from_value("multiplier", &params).unwrap_or(2) as f64; // Default multiplier is 2
 
         Ok(Self {
             data_points: Vec::new(),
-            interval,
             params,
             period,
             multiplier,
@@ -99,10 +97,6 @@ impl Algorithm for BollingerBands {
     // Implement the rest of the required methods from the Algo trait...
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

@@ -10,7 +10,6 @@ use std::time::Duration;
 
 pub struct Macd {
     data_points: Vec<Kline>,
-    interval: Duration,
     short_ema_period: usize,
     long_ema_period: usize,
     signal_ema_period: usize,
@@ -20,7 +19,7 @@ pub struct Macd {
 }
 
 impl Macd {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         // Extract parameters or set to default values
         let short_ema_period = params
             .get("short_ema_period")
@@ -37,7 +36,6 @@ impl Macd {
 
         Ok(Self {
             data_points: Vec::new(),
-            interval,
             short_ema_period,
             long_ema_period,
             signal_ema_period,
@@ -108,10 +106,6 @@ impl Algorithm for Macd {
 
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

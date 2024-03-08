@@ -33,14 +33,6 @@ pub trait Algorithm: Send + Sync {
 
     fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult;
 
-    /// Returns the time interval that the algorithm operates on.
-    ///
-    /// # Returns
-    ///
-    /// A `Duration` representing the interval between k-lines that the algorithm evaluates.
-
-    fn interval(&self) -> Duration;
-
     /// Sets the algorithm's parameters based on a JSON `Value`.
     ///
     /// # Arguments

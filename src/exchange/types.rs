@@ -63,6 +63,13 @@ impl From<std::io::Error> for ApiError {
     }
 }
 
+impl From<&'static str> for ApiError {
+    fn from(e: &'static str) -> Self {
+        // Convert std::string::String to ApiError
+        ApiError::Parsing(e.to_string())
+    }
+}
+
 /// Conversion implementation for `String` into `ApiError`.
 ///
 /// This implementation allows conversion from `String` to `ApiError::Parsing`.

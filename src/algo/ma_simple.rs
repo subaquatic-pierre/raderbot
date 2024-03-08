@@ -11,18 +11,16 @@ use crate::utils::number::parse_usize_from_value;
 
 pub struct SimpleMovingAverage {
     data_points: Vec<Kline>,
-    interval: Duration,
     period: usize,
     params: Value,
 }
 
 impl SimpleMovingAverage {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let period = parse_usize_from_value("sma_period", &params.clone())
             .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         Ok(Self {
             data_points: vec![],
-            interval,
             period,
             params,
         })
@@ -69,10 +67,6 @@ impl Algorithm for SimpleMovingAverage {
 
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

@@ -14,6 +14,7 @@ use crate::{
     },
     algo::builder::AlgoBuilder,
     market::{
+        interval::Interval,
         kline::{self, Kline},
         market::Market,
         types::{ArcMutex, ArcSender},
@@ -37,11 +38,10 @@ pub struct Strategy {
     pub id: StrategyId,
     pub symbol: String,
     pub name: String,
-    interval: String,
+    settings: StrategySettings,
     market: ArcMutex<Market>,
     strategy_tx: ArcSender<SignalMessage>,
     pub algorithm: ArcMutex<Box<dyn Algorithm>>,
-    settings: StrategySettings,
     start_time: Option<String>,
     end_time: Option<String>,
     kline_manager: ArcMutex<StrategyKlineManager>,
@@ -68,19 +68,17 @@ impl Strategy {
     pub fn new(
         strategy_name: &str,
         symbol: &str,
-        interval: &str,
         strategy_tx: ArcSender<SignalMessage>,
         market: ArcMutex<Market>,
         settings: StrategySettings,
         algorithm_params: Value,
     ) -> Result<Self, AlgoError> {
-        let algorithm = AlgoBuilder::build_algorithm(strategy_name, interval, algorithm_params)?;
+        let algorithm = AlgoBuilder::build_algorithm(strategy_name, algorithm_params)?;
 
         Ok(Self {
             id: Uuid::new_v4(),
             name: strategy_name.to_string(),
             market,
-            interval: interval.to_string(),
             symbol: symbol.to_string(),
             strategy_tx,
             algorithm: ArcMutex::new(algorithm),
@@ -107,8 +105,7 @@ impl Strategy {
         let id = self.id.clone();
         let symbol = self.symbol.clone();
         let algorithm = self.algorithm.clone();
-        let interval_str = self.interval.clone();
-        let interval_duration = algorithm.lock().await.interval();
+        let interval = self.settings.interval.clone();
 
         let market = self.market.clone();
         let kline_manager = self.kline_manager.clone();
@@ -133,10 +130,10 @@ impl Strategy {
             loop {
                 // wait for duration of strategy interval first,
                 // to ensure at least one kline of data is populated in the market
-                time::sleep(interval_duration).await;
+                time::sleep(interval.to_duration()).await;
 
                 // get the latest kline from the market
-                let kline = market.lock().await.last_kline(&symbol, &interval_str).await;
+                let kline = market.lock().await.last_kline(&symbol, interval).await;
 
                 // perform some house keeping with klines before evaluating the data
                 // check kline is fresh otherwise continue to next interval
@@ -342,7 +339,7 @@ impl Strategy {
             settings: self.settings.clone(),
             params: self.algorithm.lock().await.get_params().clone(),
             symbol: self.symbol.clone(),
-            interval: self.interval.clone(),
+            interval: self.settings.interval.clone(),
             running: self.running,
             start_time: self.start_time.clone(),
             end_time: self.end_time.clone(),
@@ -531,7 +528,7 @@ pub struct StrategyInfo {
     pub id: StrategyId,
     pub name: String,
     pub symbol: String,
-    pub interval: String,
+    pub interval: Interval,
     pub settings: StrategySettings,
     pub params: Value,
     pub running: bool,
@@ -550,7 +547,7 @@ impl Default for StrategyInfo {
             id: Uuid::new_v4(),
             name: "".to_string(),
             symbol: "".to_string(),
-            interval: "".to_string(),
+            interval: Interval::Invalid,
             settings: StrategySettings::default(),
             params: json!({}),
             start_time: None,
@@ -567,6 +564,7 @@ impl Default for StrategyInfo {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StrategySettings {
+    pub interval: Interval,
     pub max_open_orders: u32,
     pub margin_usd: f64,
     pub leverage: u32,
@@ -581,6 +579,7 @@ pub struct StrategySettings {
 impl Default for StrategySettings {
     fn default() -> Self {
         Self {
+            interval: Interval::Min1,
             max_open_orders: 1,
             margin_usd: 100.0,
             leverage: 1,

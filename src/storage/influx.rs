@@ -8,6 +8,7 @@ use std::{any, error::Error};
 use uuid::Uuid;
 
 use super::manager::StorageManager;
+use crate::market::interval::Interval;
 use crate::{
     account::trade::OrderSide,
     market::{kline::Kline, trade::Trade},
@@ -74,7 +75,7 @@ impl StorageManager for InfluxStorage {
     async fn get_klines(
         &self,
         symbol: &str,
-        interval: &str,
+        interval: Interval,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
     ) -> Vec<Kline> {

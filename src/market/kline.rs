@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::{
     exchange::types::ApiResult,
+    market::interval::Interval,
     market::market::MarketDataSymbol,
     utils::{
         number::parse_f64_from_lookup,
@@ -28,16 +29,16 @@ use crate::{
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KlineMeta {
     pub symbol: String,
-    pub interval: String,
+    pub interval: Interval,
     pub len: usize,
     pub last_update: u64,
 }
 
 impl KlineMeta {
-    pub fn new(symbol: &str, interval: &str) -> Self {
+    pub fn new(symbol: &str, interval: Interval) -> Self {
         Self {
             symbol: symbol.to_string(),
-            interval: interval.to_string(),
+            interval: interval,
             len: 0,
             last_update: generate_ts(),
         }
@@ -60,7 +61,7 @@ impl KlineData {
     ///
     /// This method initializes a `KlineData` object with empty kline data and associated metadata.
 
-    pub fn new(symbol: &str, interval: &str) -> Self {
+    pub fn new(symbol: &str, interval: Interval) -> Self {
         Self {
             meta: KlineMeta::new(symbol, interval),
             klines: BTreeMap::new(),
@@ -106,7 +107,7 @@ impl KlineData {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Kline {
     pub symbol: String,
-    pub interval: String,
+    pub interval: Interval,
     pub open: f64,
     pub high: f64,
     pub low: f64,
@@ -119,7 +120,7 @@ pub struct Kline {
 impl Default for Kline {
     fn default() -> Self {
         Self {
-            interval: "UNkown".to_string(),
+            interval: Interval::Invalid,
             symbol: "Unknown".to_string(),
             open_time: 42,
             open: 42.2,
@@ -201,7 +202,7 @@ impl Kline {
         let volume = parse_f64_from_lookup("v", &_kline)?;
 
         Ok(Self {
-            interval: interval.to_string(),
+            interval: interval.try_into()?,
             symbol: symbol.to_string(),
             open_time,
             open,
@@ -220,7 +221,7 @@ impl Kline {
     pub fn from_bingx_lookup(
         data: HashMap<String, Value>,
         symbol: &str,
-        interval: &str,
+        interval: Interval,
     ) -> ApiResult<Self> {
         // {
         //     "open": "float64",
@@ -254,7 +255,7 @@ impl Kline {
         let volume = parse_f64_from_lookup("volume", &data)?;
 
         Ok(Self {
-            interval: interval.to_string(),
+            interval: interval,
             symbol: symbol.to_string(),
             open_time,
             open,
@@ -295,7 +296,7 @@ impl Kline {
 
         let close_time = data.get("T").unwrap().as_u64().unwrap();
 
-        let open_time = calculate_kline_open_time(close_time, &interval);
+        let open_time = calculate_kline_open_time(close_time, interval.clone().try_into()?);
 
         let open = parse_f64_from_lookup("o", &data)?;
         let close = parse_f64_from_lookup("c", &data)?;
@@ -306,7 +307,7 @@ impl Kline {
         let volume = parse_f64_from_lookup("v", &data)?;
 
         Ok(Self {
-            interval,
+            interval: interval.try_into()?,
             symbol: symbol.to_string(),
             open_time,
             open,

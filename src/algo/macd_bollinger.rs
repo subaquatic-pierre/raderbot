@@ -10,7 +10,6 @@ use std::time::Duration;
 
 pub struct MacdBollingerBands {
     data_points: Vec<Kline>,
-    interval: Duration,
     bollinger_period: usize,
     bollinger_multiplier: f64,
     short_ema_period: usize,
@@ -22,7 +21,7 @@ pub struct MacdBollingerBands {
 }
 
 impl MacdBollingerBands {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let bollinger_period = params
             .get("bollinger_period")
             .and_then(Value::as_u64)
@@ -46,7 +45,6 @@ impl MacdBollingerBands {
 
         Ok(Self {
             data_points: Vec::new(),
-            interval,
             bollinger_period,
             bollinger_multiplier,
             short_ema_period,
@@ -139,10 +137,6 @@ impl Algorithm for MacdBollingerBands {
 
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 
 use crate::account::trade::Position;
 use crate::app::AppState;
+use crate::market::interval::Interval;
 use crate::strategy::strategy::{StrategyId, StrategySettings};
 use crate::utils::time::string_to_timestamp;
 
@@ -18,7 +19,7 @@ pub struct NewStrategyParams {
     symbol: String,
     strategy_name: String,
     algorithm_params: Value,
-    interval: String,
+    interval: Interval,
     margin: Option<f64>,
     leverage: Option<u32>,
 }
@@ -32,6 +33,7 @@ async fn new_strategy(
     let settings = StrategySettings {
         max_open_orders: 2,
         margin_usd: body.margin.unwrap_or(1000.0),
+        interval: Interval::Min1,
         leverage: body.leverage.unwrap_or(10),
         stop_loss: None,
     };
@@ -42,7 +44,6 @@ async fn new_strategy(
         .start_strategy(
             &body.strategy_name,
             &body.symbol,
-            &body.interval,
             settings,
             body.algorithm_params.clone(),
         )
@@ -283,7 +284,7 @@ pub struct RunBackTestParams {
     symbol: String,
     strategy_name: String,
     algorithm_params: Value,
-    interval: String,
+    interval: Interval,
     margin: Option<f64>,
     leverage: Option<u32>,
     from_ts: String,
@@ -297,6 +298,7 @@ async fn run_back_test(
     let bot = app_data.bot.clone();
     let settings = StrategySettings {
         max_open_orders: 2,
+        interval: Interval::Min1,
         margin_usd: body.margin.unwrap_or_else(|| 1000.0),
         leverage: body.leverage.unwrap_or_else(|| 10),
         stop_loss: None,
@@ -319,7 +321,6 @@ async fn run_back_test(
         .run_back_test(
             &body.strategy_name,
             &body.symbol,
-            &body.interval,
             from_ts,
             to_ts,
             settings,

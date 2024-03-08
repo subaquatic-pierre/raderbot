@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use std::error::Error;
 use std::io::{self};
 
+use crate::market::interval::Interval;
 use crate::market::trade::Trade;
 use crate::strategy::strategy::StrategyInfo;
 use crate::{
@@ -32,7 +33,7 @@ pub trait StorageManager: Send + Sync {
     async fn get_klines(
         &self,
         symbol: &str,
-        interval: &str,
+        interval: Interval,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
     ) -> Vec<Kline>;

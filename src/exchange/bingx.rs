@@ -24,6 +24,7 @@ use crate::market::trade::Trade;
 use crate::market::types::{ArcMutex, ArcSender};
 use crate::market::{kline::Kline, ticker::Ticker};
 
+use crate::market::interval::{self, Interval};
 use crate::utils::time::generate_ts;
 
 use super::api::ExchangeInfo;
@@ -240,7 +241,7 @@ impl ExchangeApi for BingXApi {
     ///
     /// Returns an `ApiResult<Kline>`, encapsulating the latest k-line data. In case of an error, it returns an appropriate error encapsulated within `ApiResult`.
 
-    async fn get_kline(&self, symbol: &str, interval: &str) -> ApiResult<Kline> {
+    async fn get_kline(&self, symbol: &str, interval: Interval) -> ApiResult<Kline> {
         get_bingx_kline(symbol, interval).await
     }
 
@@ -448,7 +449,7 @@ impl ExchangeApi for BingXApi {
         &self,
         _symbol: &str,
         _stream_type: StreamType,
-        _interval: Option<&str>,
+        _interval: Option<Interval>,
     ) -> String {
         self.ws_host.to_string()
     }
@@ -547,20 +548,15 @@ impl StreamManager for BingXStreamManager {
 
                 let thread_handle = tokio::spawn(async move {
                     loop {
-                        let kline = get_bingx_kline(
-                            &stream_meta.symbol,
-                            &stream_meta
-                                .interval
-                                .clone()
-                                .unwrap_or_else(|| "UNKNOWN".to_string()),
-                        )
-                        .await;
+                        if let Some(interval) = stream_meta.interval {
+                            let kline = get_bingx_kline(&stream_meta.symbol, interval).await;
 
-                        if let Ok(kline) = kline {
-                            // let ticker = BingXApi::parse_ticker(&ticker_str);
-                            let _ = market_sender.send(MarketMessage::UpdateKline(kline));
-                        } else {
-                            warn!("Unable to get kline from BingX API");
+                            if let Ok(kline) = kline {
+                                // let ticker = BingXApi::parse_ticker(&ticker_str);
+                                let _ = market_sender.send(MarketMessage::UpdateKline(kline));
+                            } else {
+                                warn!("Unable to get kline from BingX API");
+                            }
                         }
 
                         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -649,24 +645,17 @@ impl StreamManager for BingXStreamManager {
 ///
 /// Returns an `ApiResult<Kline>`, which is either the latest Kline data for the symbol and interval if successful, or an error message if the request fails or data is incomplete.
 
-pub async fn get_bingx_kline(symbol: &str, interval: &str) -> ApiResult<Kline> {
+pub async fn get_bingx_kline(symbol: &str, interval: Interval) -> ApiResult<Kline> {
     let symbol = BingXApi::format_bingx_symbol(symbol, false);
     // remove last two letters from interval if interval is {number}min
     // api accepts interval as {number}m
-    let _interval = if interval.ends_with('n') {
-        let mut interval_copy = interval.to_string();
-        interval_copy.pop();
-        interval_copy.pop();
-        interval_copy
-    } else {
-        interval.to_string()
-    };
     let ts = generate_ts().to_string();
+    let str_interval = interval.to_string();
 
     let client = reqwest::Client::new();
     let query_str = QueryStr::new(vec![
         ("symbol", &symbol),
-        ("interval", &_interval),
+        ("interval", &str_interval),
         ("timestamp", &ts),
         ("limit", "1"),
     ]);

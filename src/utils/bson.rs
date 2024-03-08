@@ -6,7 +6,7 @@ pub fn build_bson_kline_meta(kline: &Kline) -> String {
     format!(
         "{}@{}",
         kline.open_time,
-        build_kline_key(&kline.symbol, &kline.interval)
+        build_kline_key(&kline.symbol, kline.interval)
     )
     .to_string()
 }

@@ -9,6 +9,8 @@ use dateparser::parse;
 
 use std::time::{Duration, SystemTime};
 
+use crate::market::interval::Interval;
+
 pub const SEC_AS_MILI: u64 = 1000;
 pub const MIN_AS_MILI: u64 = SEC_AS_MILI * 60; // 60000
 pub const HOUR_AS_MILI: u64 = MIN_AS_MILI * 60; // 3600000
@@ -157,21 +159,9 @@ pub fn get_time_difference(from_ts: u64, to_ts: u64) -> u64 {
 /// # Returns
 ///
 /// A `u64` representing the open time of the k-line in milliseconds.
-pub fn calculate_kline_open_time(close_time: u64, interval: &str) -> u64 {
-    // Convert the interval to seconds
-    let interval_seconds = match interval {
-        "1m" => 60,
-        "5m" => 5 * 60,
-        "15m" => 15 * 60,
-        // Add more interval cases as needed
-        _ => {
-            println!("Unsupported interval: {}", interval);
-            return 0; // Return 0 if interval is unsupported
-        }
-    };
-
+pub fn calculate_kline_open_time(close_time: u64, interval: Interval) -> u64 {
     // Calculate the open time by subtracting interval seconds from the close time
-    (close_time + 1) - (interval_seconds * 1000)
+    (close_time + 1) - interval.to_mili()
 }
 
 /// Builds a `Duration` representing the interval specified by a string.

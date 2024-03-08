@@ -2,7 +2,6 @@ use crate::market::kline::Kline;
 use crate::market::trade::Trade;
 use crate::strategy::types::AlgoError;
 use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
-use crate::utils::number::parse_usize_from_value;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
@@ -15,21 +14,19 @@ pub struct RsiParams {
 
 pub struct Rsi {
     data_points: Vec<Kline>,
-    interval: Duration,
     params: Value,
     rsi_period: usize,
     rsi: f64, // Optional: Store the last calculated RSI value
 }
 
 impl Rsi {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let rsi_params: RsiParams = serde_json::from_value(params.clone())?;
 
         let rsi_period = rsi_params.rsi_period.unwrap_or(14);
 
         Ok(Self {
             data_points: vec![],
-            interval,
             rsi_period,
             rsi: 0.0,
             params,
@@ -91,10 +88,6 @@ impl Algorithm for Rsi {
 
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

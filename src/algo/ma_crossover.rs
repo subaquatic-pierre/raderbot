@@ -17,7 +17,6 @@ use ta::Next;
 
 pub struct EmaSmaCrossover {
     data_points: Vec<Kline>,
-    interval: Duration,
     ema_period: usize,
     sma_period: usize,
     ema: ExponentialMovingAverage,
@@ -26,7 +25,7 @@ pub struct EmaSmaCrossover {
 }
 
 impl EmaSmaCrossover {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let ema_period = parse_usize_from_value("ema_period", &params)
             .or_else(|e| Err(AlgoError::InvalidParams(e.to_string())))?;
         let sma_period = parse_usize_from_value("sma_period", &params)
@@ -39,7 +38,6 @@ impl EmaSmaCrossover {
 
         Ok(Self {
             data_points: vec![],
-            interval,
             ema_period,
             sma_period,
             ema,
@@ -89,10 +87,6 @@ impl Algorithm for EmaSmaCrossover {
 
     fn data_points(&self) -> Vec<Kline> {
         self.data_points.clone()
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

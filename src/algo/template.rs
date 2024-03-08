@@ -18,18 +18,16 @@ pub struct CustomAlgoParams {
 
 pub struct CustomAlgo {
     data_points: Vec<Kline>,
-    interval: Duration,
     custom_param: usize,
     params: Value,
 }
 
 impl CustomAlgo {
-    pub fn new(interval: Duration, params: Value) -> Result<Self, AlgoError> {
+    pub fn new(params: Value) -> Result<Self, AlgoError> {
         let custom_params: CustomAlgoParams = serde_json::from_value(params.clone())?;
 
         Ok(Self {
             data_points: vec![],
-            interval,
             custom_param: custom_params.custom_param.unwrap_or(42),
             params,
         })
@@ -54,10 +52,6 @@ impl Algorithm for CustomAlgo {
         self.clean_data_points();
 
         AlgoEvalResult::Ignore
-    }
-
-    fn interval(&self) -> Duration {
-        self.interval
     }
 
     fn get_params(&self) -> &Value {

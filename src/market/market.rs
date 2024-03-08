@@ -13,6 +13,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::exchange::api::ExchangeInfo;
 use crate::exchange::stream::build_stream_id;
 use crate::exchange::types::{ApiResult, StreamType};
+use crate::market::interval::Interval;
 use crate::utils::kline::{build_kline_key, build_ticker_key};
 use crate::utils::time::{floor_mili_ts, interval_to_millis, MIN_AS_MILI, SEC_AS_MILI};
 use crate::utils::trade::build_market_trade_key;
@@ -33,7 +34,6 @@ use crate::{
 
 use super::trade::{Trade, TradeData, TradeDataMeta};
 use super::types::ArcMutex;
-use super::volume::PriceVolume;
 
 /// Represents the main market data structure for a trading application, managing market data streams, and integrating with exchange APIs.
 
@@ -122,8 +122,8 @@ impl Market {
     ///
     /// An `Option<Kline>` containing the most recent kline data if available; otherwise, `None`.
 
-    pub async fn last_kline(&self, symbol: &str, interval: &str) -> Option<Kline> {
-        let last_open_time = generate_ts() - interval_to_millis(interval);
+    pub async fn last_kline(&self, symbol: &str, interval: Interval) -> Option<Kline> {
+        let last_open_time = generate_ts() - interval.to_mili();
 
         let kline = match self
             .data
@@ -202,7 +202,7 @@ impl Market {
     pub async fn kline_data_range(
         &self,
         symbol: &str,
-        interval: &str,
+        interval: Interval,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
         limit: Option<usize>,
@@ -275,7 +275,7 @@ impl Market {
         &self,
         stream_type: StreamType,
         symbol: &str,
-        interval: Option<&str>,
+        interval: Option<Interval>,
     ) -> ApiResult<String> {
         let url = self
             .exchange_api
@@ -332,7 +332,7 @@ impl Market {
             .await;
         self.add_needed_stream("BTCUSDT", StreamType::Trade, None)
             .await;
-        self.add_needed_stream("BTCUSDT", StreamType::Kline, Some("1m"))
+        self.add_needed_stream("BTCUSDT", StreamType::Kline, Some(Interval::Min1))
             .await;
 
         self.init_market_receivers().await;
@@ -415,7 +415,7 @@ impl Market {
         &self,
         symbol: &str,
         stream_type: StreamType,
-        interval: Option<&str>,
+        interval: Option<Interval>,
     ) {
         let mut needed_streams = self.needed_streams.lock().await;
         let url = self
@@ -441,7 +441,7 @@ impl Market {
         &self,
         symbol: &str,
         stream_type: StreamType,
-        interval: Option<&str>,
+        interval: Option<Interval>,
     ) {
         let mut needed_streams = self.needed_streams.lock().await;
         let stream_id = build_stream_id(symbol, stream_type, interval);
@@ -535,13 +535,13 @@ impl MarketData {
     ///
     pub async fn update_kline(&mut self, kline: Kline) {
         // get kline key eg. BTCUSDT@kline_1m
-        let kline_key = build_kline_key(&kline.symbol, &kline.interval);
+        let kline_key = build_kline_key(&kline.symbol, kline.interval);
 
         // add new kline to data if key found for kline symbol
         if let Some(kline_data) = self.all_klines.get_mut(&kline_key) {
             kline_data.add_kline(kline);
         } else {
-            let mut new_kline_data = KlineData::new(&kline.symbol, &kline.interval);
+            let mut new_kline_data = KlineData::new(&kline.symbol, kline.interval);
             new_kline_data.add_kline(kline);
             self.all_klines
                 .insert(kline_key.to_string(), new_kline_data);
@@ -606,7 +606,7 @@ impl MarketData {
     pub async fn kline_data(
         &mut self,
         symbol: &str,
-        interval: &str,
+        interval: Interval,
         from_ts: Option<u64>,
         to_ts: Option<u64>,
         limit: Option<usize>,
