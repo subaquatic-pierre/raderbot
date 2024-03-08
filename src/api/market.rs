@@ -127,6 +127,7 @@ struct GetMarketVolumeParams {
     limit: Option<usize>,
     bucket_size: Option<f64>,
     time_interval: Option<String>,
+    fixed_price: Option<bool>,
 }
 
 #[post("/trade-volume-data")]
@@ -166,28 +167,26 @@ async fn get_volume_data(
         .await;
 
     if let Some(trade_data) = trade_data {
-        // use time interval if looking to create market volume by time
-        let time_interval = Some(
-            body.time_interval
-                .clone()
-                .unwrap_or_else(|| "1h".to_string()),
-        );
-        let bucket_size = body.bucket_size.unwrap_or_else(|| 10.0);
+        if let Some(interval) = &body.time_interval {
+            let mut market_volume = TimeVolume::new(&interval);
+            market_volume.add_trades(&trade_data.trades());
+            let bucket_volume = market_volume.result();
 
-        // let volume: dyn TradeVolume = PriceVolume::new(10.0, false);
+            // Return the stream data as JSON
+            let json_data = json!({ "volume_data": bucket_volume });
+            HttpResponse::Ok().json(json_data)
+        } else {
+            let bucket_size = body.bucket_size.unwrap_or_else(|| 10.0);
+            let fixed_price = body.fixed_price.unwrap_or_else(|| true);
 
-        let mut market_volume = PriceVolume::new(bucket_size, true);
-        // let mut market_volume= if let Some(interval) = &body.time_interval {
-        //     Box::new(TimeVolume::new(interval))
-        // } else {
-        //     Box::new(PriceVolume::new(bucket_size, true))
-        // };
+            let mut market_volume = PriceVolume::new(bucket_size, fixed_price);
 
-        market_volume.add_trades(&trade_data.trades());
-        let bucket_volume = market_volume.result();
-        // Return the stream data as JSON
-        let json_data = json!({ "volume_data": bucket_volume });
-        HttpResponse::Ok().json(json_data)
+            market_volume.add_trades(&trade_data.trades());
+            let bucket_volume = market_volume.result();
+            // Return the stream data as JSON
+            let json_data = json!({ "volume_data": bucket_volume });
+            HttpResponse::Ok().json(json_data)
+        }
     } else {
         let json_data = json!({ "error": "Trade Data data not found" });
         // Stream ID not found

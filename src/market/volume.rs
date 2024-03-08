@@ -1,13 +1,12 @@
 use crate::{
     account::trade::OrderSide,
+    market::trade::Trade,
     utils::{
         time::{floor_mili_ts, generate_ts, timestamp_to_string, HOUR_AS_MILI, MIN_AS_MILI},
         trade::{calc_min_max, calc_total_volume},
     },
 };
 
-use super::trade::Trade;
-use actix_web::web::BytesMut;
 use log::{info, warn};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -134,6 +133,11 @@ impl TradeVolume for PriceVolume {
 
     fn result(&self) -> PriceVolumeData {
         let total_volume = calc_total_volume(&self.buckets);
+
+        info!(
+            "TOTAL: {}",
+            (total_volume.buy_volume + total_volume.sell_volume)
+        );
 
         PriceVolumeData {
             num_buckets: self.buckets.len(),
