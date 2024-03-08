@@ -10,6 +10,8 @@ use crate::{
         trade::build_market_trade_key,
     },
 };
+use base64::engine::general_purpose;
+use base64::Engine;
 use uuid::Uuid;
 
 use async_trait::async_trait;
@@ -377,7 +379,11 @@ impl StorageManager for MongoDbStorage {
     ) -> Result<StrategySummary, Box<dyn Error>> {
         let collection = self.strategy_collection();
 
-        let filter = doc! {"info.id": Bson::String(strategy_id.to_string())};
+        let encoded = general_purpose::STANDARD.encode(&strategy_id.as_bytes());
+
+        let binary = bson::Binary::from_base64(&encoded, None)?;
+
+        let filter = doc! {"info.id": binary};
 
         if let Some(res) = collection.find_one(filter, None).await? {
             Ok(res)
