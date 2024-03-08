@@ -38,6 +38,7 @@ pub struct Strategy {
     pub id: StrategyId,
     pub symbol: String,
     pub name: String,
+    pub interval: Interval,
     settings: StrategySettings,
     market: ArcMutex<Market>,
     strategy_tx: ArcSender<SignalMessage>,
@@ -68,6 +69,7 @@ impl Strategy {
     pub fn new(
         strategy_name: &str,
         symbol: &str,
+        interval: Interval,
         strategy_tx: ArcSender<SignalMessage>,
         market: ArcMutex<Market>,
         settings: StrategySettings,
@@ -80,6 +82,7 @@ impl Strategy {
             name: strategy_name.to_string(),
             market,
             symbol: symbol.to_string(),
+            interval,
             strategy_tx,
             algorithm: ArcMutex::new(algorithm),
             settings,
@@ -105,7 +108,7 @@ impl Strategy {
         let id = self.id.clone();
         let symbol = self.symbol.clone();
         let algorithm = self.algorithm.clone();
-        let interval = self.settings.interval.clone();
+        let interval = self.interval.clone();
 
         let market = self.market.clone();
         let kline_manager = self.kline_manager.clone();
@@ -339,7 +342,7 @@ impl Strategy {
             settings: self.settings.clone(),
             params: self.algorithm.lock().await.get_params().clone(),
             symbol: self.symbol.clone(),
-            interval: self.settings.interval.clone(),
+            interval: self.interval.clone(),
             running: self.running,
             start_time: self.start_time.clone(),
             end_time: self.end_time.clone(),
@@ -564,7 +567,6 @@ impl Default for StrategyInfo {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StrategySettings {
-    pub interval: Interval,
     pub max_open_orders: u32,
     pub margin_usd: f64,
     pub leverage: u32,
@@ -579,7 +581,6 @@ pub struct StrategySettings {
 impl Default for StrategySettings {
     fn default() -> Self {
         Self {
-            interval: Interval::Min1,
             max_open_orders: 1,
             margin_usd: 100.0,
             leverage: 1,

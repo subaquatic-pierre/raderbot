@@ -33,7 +33,6 @@ async fn new_strategy(
     let settings = StrategySettings {
         max_open_orders: 2,
         margin_usd: body.margin.unwrap_or(1000.0),
-        interval: Interval::Min1,
         leverage: body.leverage.unwrap_or(10),
         stop_loss: None,
     };
@@ -44,6 +43,7 @@ async fn new_strategy(
         .start_strategy(
             &body.strategy_name,
             &body.symbol,
+            body.interval,
             settings,
             body.algorithm_params.clone(),
         )
@@ -298,7 +298,6 @@ async fn run_back_test(
     let bot = app_data.bot.clone();
     let settings = StrategySettings {
         max_open_orders: 2,
-        interval: Interval::Min1,
         margin_usd: body.margin.unwrap_or_else(|| 1000.0),
         leverage: body.leverage.unwrap_or_else(|| 10),
         stop_loss: None,
@@ -321,6 +320,7 @@ async fn run_back_test(
         .run_back_test(
             &body.strategy_name,
             &body.symbol,
+            body.interval,
             from_ts,
             to_ts,
             settings,
