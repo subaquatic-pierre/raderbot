@@ -50,11 +50,9 @@ impl BackTest {
         _initial_balance: Option<f64>,
     ) -> Self {
         let (_, market_rx) = build_arc_channel::<MarketMessage>();
-        let exchange_api: Arc<Box<dyn ExchangeApi>> =
-            Arc::new(Box::new(MockExchangeApi::default()));
+        let exchange_api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi::default());
 
-        let storage_manager: Arc<Box<dyn StorageManager>> =
-            Arc::new(Box::new(FsStorage::default()));
+        let storage_manager: Arc<dyn StorageManager> = Arc::new(FsStorage::default());
 
         let market = ArcMutex::new(
             Market::new(

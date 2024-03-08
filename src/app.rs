@@ -45,7 +45,7 @@ impl AppState {
         self.bot.lock().await.market.clone()
     }
 
-    pub async fn get_storage_manager(&self) -> Arc<Box<dyn StorageManager>> {
+    pub async fn get_storage_manager(&self) -> Arc<dyn StorageManager> {
         self.bot.lock().await.storage_manager.clone()
     }
 
@@ -58,7 +58,7 @@ impl AppState {
     ///
     /// An `Arc<Box<dyn ExchangeApi>>` providing a polymorphic interface to the exchange API,
     /// allowing for flexibility in supporting multiple exchanges.
-    pub async fn get_exchange_api(&self) -> Arc<Box<dyn ExchangeApi>> {
+    pub async fn get_exchange_api(&self) -> Arc<dyn ExchangeApi> {
         self.bot.lock().await.exchange_api.clone()
     }
 }

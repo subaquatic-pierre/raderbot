@@ -40,7 +40,7 @@ use super::volume::PriceVolume;
 pub struct Market {
     market_receiver: ArcReceiver<MarketMessage>,
     data: ArcMutex<MarketData>,
-    exchange_api: Arc<Box<dyn ExchangeApi>>,
+    exchange_api: Arc<dyn ExchangeApi>,
     needed_streams: ArcMutex<Vec<StreamMeta>>,
 }
 
@@ -67,7 +67,7 @@ impl Market {
 
     pub async fn new(
         market_receiver: ArcReceiver<MarketMessage>,
-        exchange_api: Arc<Box<dyn ExchangeApi>>,
+        exchange_api: Arc<dyn ExchangeApi>,
         storage_manager: Arc<dyn StorageManager>,
         init_workers: bool,
     ) -> Self {

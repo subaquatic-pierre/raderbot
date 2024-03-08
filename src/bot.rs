@@ -31,7 +31,7 @@ pub struct RaderBot {
     pub market: ArcMutex<Market>,
     pub account: ArcMutex<Account>,
     strategy_manager: ArcMutex<StrategyManager>,
-    pub exchange_api: Arc<Box<dyn ExchangeApi>>,
+    pub exchange_api: Arc<dyn ExchangeApi>,
     pub storage_manager: Arc<dyn StorageManager>,
     strategy_tx: ArcSender<SignalMessage>,
     strategy_rx: ArcReceiver<SignalMessage>,
@@ -51,12 +51,12 @@ impl RaderBot {
         // create new channel for stream handler and market to communicate
         let (market_tx, market_rx) = build_arc_channel::<MarketMessage>();
 
-        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(BinanceApi::new(
+        let exchange_api: Arc<dyn ExchangeApi> = Arc::new(BinanceApi::new(
             api_key,
             secret_key,
             market_tx.clone(),
             false,
-        )));
+        ));
         // let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(BingXApi::new(
         //     api_key,
         //     secret_key,
@@ -111,7 +111,7 @@ impl RaderBot {
         // that is to allow for retrieving market data from separate source
         // and to open and close positions on different API source
         let (account_exchange_api, dry_run) = if dry_run == "True" {
-            let api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+            let api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi {});
             (api, true)
         } else {
             // possible to create different exchange API if needed

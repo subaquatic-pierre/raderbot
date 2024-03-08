@@ -184,7 +184,7 @@ async fn set_exchange_api(
         "Bing" => app_data.get_exchange_api().await,
         "Binance" => app_data.get_exchange_api().await,
         "Mock" => {
-            let api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+            let api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi {});
             api
         }
         _ => {

@@ -19,7 +19,7 @@ pub struct Account {
     /// A vector containing trade transactions.
     trades: Vec<TradeTx>,
     /// A thread-safe reference to the exchange API.
-    exchange_api: Arc<Box<dyn ExchangeApi>>,
+    exchange_api: Arc<dyn ExchangeApi>,
     /// A flag indicating whether the account is in dry run mode.
     dry_run: bool,
 }
@@ -38,7 +38,7 @@ impl Account {
     /// A new instance of `Account`.
 
     pub async fn new(
-        exchange_api: Arc<Box<dyn ExchangeApi>>,
+        exchange_api: Arc<dyn ExchangeApi>,
         init_workers: bool,
         dry_run: bool,
     ) -> Self {
@@ -250,7 +250,7 @@ impl Account {
     /// * `api` - A thread-safe reference to the exchange API.
     /// * `dry_run` - A flag indicating whether to operate in dry run mode.
 
-    pub fn set_exchange_api(&mut self, api: Arc<Box<dyn ExchangeApi>>, dry_run: bool) {
+    pub fn set_exchange_api(&mut self, api: Arc<dyn ExchangeApi>, dry_run: bool) {
         self.dry_run = dry_run;
         self.exchange_api = api;
     }
@@ -316,7 +316,7 @@ mod test {
 
     #[test]
     async fn test_open_position() {
-        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let exchange_api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi {});
         let mut account = Account::new(exchange_api.clone(), false, true).await;
 
         // Open a position
@@ -335,7 +335,7 @@ mod test {
 
     #[test]
     async fn test_close_position() {
-        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let exchange_api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi {});
         let mut account = Account::new(exchange_api.clone(), false, true).await;
 
         // Open a position
@@ -358,7 +358,7 @@ mod test {
 
     #[test]
     async fn test_close_multiple_positions() {
-        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let exchange_api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi {});
         let mut account = Account::new(exchange_api.clone(), false, true).await;
 
         const NUM_POSITIONS: usize = 10; // Change this to the desired number of positions for testing
@@ -424,7 +424,7 @@ mod test {
 
     #[test]
     async fn test_open_positions() {
-        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let exchange_api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi {});
         let mut account = Account::new(exchange_api.clone(), false, true).await;
 
         // Open a position
@@ -445,7 +445,7 @@ mod test {
 
     #[test]
     async fn test_strategy_open_positions() {
-        let exchange_api: Arc<Box<dyn ExchangeApi>> = Arc::new(Box::new(MockExchangeApi {}));
+        let exchange_api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi {});
         let mut account = Account::new(exchange_api.clone(), false, true).await;
 
         let strategy_id_1 = Uuid::new_v4();
