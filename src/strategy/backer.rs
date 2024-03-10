@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use log::info;
+
 use crate::{
     account::{
         account::Account,
@@ -7,7 +9,7 @@ use crate::{
     },
     exchange::{api::ExchangeApi, mock::MockExchangeApi},
     market::{kline::KlineData, market::Market, messages::MarketMessage, types::ArcMutex},
-    storage::{fs::FsStorage, manager::StorageManager},
+    storage::{fs::FsStorage, manager::StorageManager, mongo::MongoDbStorage},
     strategy::{
         signal::SignalManager,
         strategy::{Strategy, StrategySummary},
@@ -52,7 +54,7 @@ impl BackTest {
         let (_, market_rx) = build_arc_channel::<MarketMessage>();
         let exchange_api: Arc<dyn ExchangeApi> = Arc::new(MockExchangeApi::default());
 
-        let storage_manager: Arc<dyn StorageManager> = Arc::new(FsStorage::default());
+        let storage_manager: Arc<dyn StorageManager> = market.lock().await.storage_manager.clone();
 
         let market = ArcMutex::new(
             Market::new(

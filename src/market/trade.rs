@@ -86,8 +86,6 @@ impl TradeData {
     }
 }
 
-pub type MarketTradeId = Uuid;
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Trade {
     pub symbol: String,

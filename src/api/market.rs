@@ -66,7 +66,7 @@ async fn get_ticker_data(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GetMarketTradesParams {
     symbol: String,
     from_ts: Option<String>,

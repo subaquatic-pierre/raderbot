@@ -1,61 +1,84 @@
 use log::info;
 use serde_json::Value;
+use uuid::serde;
 
 use crate::market::kline::Kline;
 
 use crate::market::trade::Trade;
-use crate::market::volume::{PriceVolume, TradeVolume};
+use crate::market::volume::{PriceVolume, PriceVolumeData, TradeVolume};
 use crate::strategy::types::AlgoError;
 use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;
 use crate::utils::time::{floor_mili_ts, generate_ts, HOUR_AS_MILI, MIN_AS_MILI};
 
-pub struct VolumeProfile {
+pub struct VolumeBreakout {
     data_points: Vec<Kline>,
     market_volume: PriceVolume,
     last_auction_period: AuctionPeriod,
     params: Value,
+    // recent_high: f64,
+    // recent_low: f64,
 }
 
-impl VolumeProfile {
+impl VolumeBreakout {
     pub fn new(params: Value) -> Result<Self, AlgoError> {
         Ok(Self {
             data_points: vec![],
             market_volume: PriceVolume::new(10.0, true),
             last_auction_period: AuctionPeriod::Unknown,
             params,
+            // recent_high: 0.0,
+            // recent_low: std::f64::MAX,
         })
     }
 
-    // Add any custom methods specific to this algorithm here
-
-    // Example method:
-    // fn calculate_custom_value(&self) -> f64 {
-    //     // Custom logic using self.custom_param
-    //     // ...
-    // }
+    fn reset_data(&mut self) {
+        self.data_points = vec![];
+        self.market_volume.reset_volumes();
+    }
 }
 
-impl Algorithm for VolumeProfile {
+impl Algorithm for VolumeBreakout {
     fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
-        self.data_points.push(kline.clone());
+        // add data to strategy
+        // self.data_points.push(kline.clone());
         self.market_volume.add_trades(trades);
 
+        // get volume within this kline
+
+        // Update the recent high/low for the last auction period
         let new_period = determine_auction_period(&kline);
 
-        if new_period != self.last_auction_period {
+        // moving out of known period
+        if self.last_auction_period != AuctionPeriod::Unknown
+            && new_period == AuctionPeriod::Unknown
+        {
+            let vol_res: PriceVolumeData = self.market_volume.result().into();
             info!(
-                "MOVING INTO NEW AUCTION PERIOD: FROM: {:?} TO: {:?}",
-                self.last_auction_period, new_period
+                "LAST PERIOD: {:?}, LAST_HIGH: {}, LAST_LOW: {}, LAST_POC: {}",
+                self.last_auction_period, vol_res.max_price, vol_res.min_price, vol_res.poc
             );
         }
 
-        self.last_auction_period = determine_auction_period(&kline);
+        // moving into new period
+        if self.last_auction_period == AuctionPeriod::Unknown
+            && new_period != self.last_auction_period
+        {
+            self.reset_data();
+            // info!(
+            //     "MOVING INTO NEW AUCTION PERIOD: FROM: {:?} TO: {:?}",
+            //     self.last_auction_period, new_period
+            // );
+        }
+        self.last_auction_period = new_period;
 
-        self.clean_data_points();
-
+        // Example: Just return Ignore for now
         AlgoEvalResult::Ignore
     }
+
+    // ---
+    // Trait helper methods
+    // ---
 
     fn get_params(&self) -> &Value {
         &self.params
@@ -118,8 +141,7 @@ fn determine_auction_period(kline: &Kline) -> AuctionPeriod {
     let kline_time = kline.close_time; // Assuming close_time represents the time of the kline
 
     // Calculate the current day's starting UTC time
-    let now = generate_ts();
-    let start_of_day = floor_mili_ts(now, HOUR_AS_MILI * 24); // Round down to the start of the day
+    let start_of_day = floor_mili_ts(kline.open_time, HOUR_AS_MILI * 24); // Round down to the start of the day
 
     // Check ASIA window
     if kline_time >= calc_window(start_of_day, ASIA_START)

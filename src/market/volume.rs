@@ -16,7 +16,7 @@ pub trait TradeVolume {
     fn result(&self) -> impl Serialize;
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct PriceVolume {
     pub bucket_size: f64,
     pub buckets: BTreeMap<String, BucketVolume>,
@@ -38,6 +38,14 @@ impl PriceVolume {
             end_time: 0,
             fixed_price,
         }
+    }
+
+    pub fn reset_volumes(&mut self) {
+        self.buckets = BTreeMap::new();
+        self.min_price = 0.0;
+        self.max_price = 0.0;
+        self.start_time = u64::MAX;
+        self.end_time = 0;
     }
 
     fn add_trade_by_price(&mut self, trades: &[Trade]) {

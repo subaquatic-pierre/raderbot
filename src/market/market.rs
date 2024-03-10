@@ -41,6 +41,7 @@ pub struct Market {
     market_receiver: ArcReceiver<MarketMessage>,
     data: ArcMutex<MarketData>,
     exchange_api: Arc<dyn ExchangeApi>,
+    pub storage_manager: Arc<dyn StorageManager>,
     needed_streams: ArcMutex<Vec<StreamMeta>>,
 }
 
@@ -72,7 +73,8 @@ impl Market {
         init_workers: bool,
     ) -> Self {
         let mut _self = Self {
-            data: ArcMutex::new(MarketData::new(storage_manager)),
+            data: ArcMutex::new(MarketData::new(storage_manager.clone())),
+            storage_manager: storage_manager.clone(),
             market_receiver,
             exchange_api,
             needed_streams: ArcMutex::new(vec![]),
