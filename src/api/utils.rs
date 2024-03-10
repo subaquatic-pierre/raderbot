@@ -84,14 +84,25 @@ async fn load_klines(
 
             let (symbol, str_interval) = interval_symbol_from_binance_filename(&file_name);
 
-            let interval = str_interval.try_into().unwrap_or(Interval::Invalid);
+            match str_interval.try_into() {
+                Ok(interval) => {
+                    let kline_key = build_kline_key(&symbol, interval);
 
-            let kline_key = build_kline_key(&symbol, interval);
+                    let klines = load_binance_klines(entry.path(), &symbol, interval);
 
-            let klines = load_binance_klines(entry.path(), &symbol, interval);
-
-            if let Err(e) = storage_manager.save_klines(&klines, &kline_key, true).await {
-                info!("Unable to save klines: {e}");
+                    if let Err(e) = storage_manager.save_klines(&klines, &kline_key, true).await {
+                        let msg = format!("Unable to save klines: {e}");
+                        info!("{msg}");
+                        let json_data = json!({ "error": msg });
+                        return HttpResponse::Ok().json(json_data);
+                    }
+                }
+                Err(e) => {
+                    let msg = format!("Unable to get interval from string: {e}");
+                    info!("{msg}");
+                    let json_data = json!({ "error": msg });
+                    return HttpResponse::Ok().json(json_data);
+                }
             }
         }
     }

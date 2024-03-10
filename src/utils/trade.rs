@@ -155,6 +155,9 @@ pub fn generate_trade_filenames_in_range(trade_key: &str, from_ts: u64, to_ts: u
 }
 
 pub fn calc_min_max(trades: &[Trade]) -> (f64, f64) {
+    if trades.len() == 0 {
+        return (0.0, 0.0);
+    }
     let min_price = trades
         .iter()
         .map(|t| t.price)

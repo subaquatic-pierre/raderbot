@@ -120,7 +120,7 @@ pub struct Kline {
 impl Default for Kline {
     fn default() -> Self {
         Self {
-            interval: Interval::Invalid,
+            interval: Interval::Min1,
             symbol: "Unknown".to_string(),
             open_time: 42,
             open: 42.2,

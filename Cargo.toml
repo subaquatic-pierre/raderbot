@@ -3,8 +3,8 @@ name = "raderbot"
 version = "0.1.0"
 edition = "2021"
 
-[toolchain]
-channel = "nightly"
+# [toolchain]
+# channel = "nightly"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -55,4 +55,4 @@ cargo-watch = "7.7.1"
 [profile.release]
 opt-level = 3
 debug = false
-lto = true # Enables Link Time Optimization for further optimization
+# lto = true # Enables Link Time Optimization for further optimization

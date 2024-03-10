@@ -181,7 +181,6 @@ impl Strategy {
                     // ---
                     // Main evaluation done here
                     // ---
-                    info!("Trades to be passed into evaluate method, {:?}", trades);
                     let order_side = algorithm.lock().await.evaluate(kline.clone(), &trades);
 
                     let order_side = match order_side {
@@ -550,7 +549,7 @@ impl Default for StrategyInfo {
             id: Uuid::new_v4(),
             name: "".to_string(),
             symbol: "".to_string(),
-            interval: Interval::Invalid,
+            interval: Interval::Day1,
             settings: StrategySettings::default(),
             params: json!({}),
             start_time: None,

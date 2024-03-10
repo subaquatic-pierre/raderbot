@@ -6,6 +6,7 @@ use actix_web::{
     HttpResponse, Responder, Scope,
 };
 
+use log::info;
 use serde::Deserialize;
 use serde_json::json;
 

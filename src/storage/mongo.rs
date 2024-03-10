@@ -431,7 +431,7 @@ impl From<BsonKline> for Kline {
             interval: bson_kline
                 .interval
                 .try_into()
-                .map_err(|e| Interval::Invalid)
+                .map_err(|e| "X".to_string())
                 .unwrap(),
             open: bson_kline.open,
             high: bson_kline.high,

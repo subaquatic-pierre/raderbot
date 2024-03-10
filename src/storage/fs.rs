@@ -3,7 +3,7 @@ use csv::ReaderBuilder;
 use directories::UserDirs;
 use log::info;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -252,13 +252,15 @@ impl StorageManager for FsStorage {
             }
         }
 
-        for (month_ts, mut klines) in klines_by_month {
-            let mut klines_to_save = vec![];
+        for (month_ts, klines) in klines_by_month {
+            let mut klines_to_save = BTreeMap::new();
 
             let kline_filename = build_kline_filename(kline_key, month_ts);
             let file_path = market_dir.join(kline_filename);
 
-            if file_path.exists() {
+            // read existing klines from file if is bootstrap, otherwise
+            // only append to file
+            if file_path.exists() && is_bootstrap {
                 let mut reader = csv::ReaderBuilder::new()
                     .has_headers(false)
                     .from_path(&file_path)?;
@@ -269,13 +271,16 @@ impl StorageManager for FsStorage {
 
                 // sort klines by open_time
                 existing_klines.sort_by_key(|k| k.open_time);
-                klines.sort_by_key(|k| k.open_time);
 
-                let merged = self._merge_klines(&existing_klines, &klines);
+                // add existing klines to klines to save
+                for kline in existing_klines {
+                    klines_to_save.insert(kline.open_time, kline);
+                }
+            }
 
-                klines_to_save.extend_from_slice(&merged);
-            } else {
-                klines_to_save.extend_from_slice(&klines);
+            // add fresh klines to klines to save
+            for kline in klines {
+                klines_to_save.insert(kline.open_time, kline);
             }
 
             let file = OpenOptions::new()
@@ -288,7 +293,7 @@ impl StorageManager for FsStorage {
                 .has_headers(false)
                 .from_writer(file);
 
-            for kline in klines_to_save {
+            for kline in klines_to_save.values() {
                 writer.serialize(kline)?
             }
 

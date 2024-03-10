@@ -16,7 +16,6 @@ pub enum Interval {
     Hour1,
     #[serde(rename = "1d")]
     Day1,
-    Invalid,
 }
 
 impl Interval {
@@ -27,7 +26,6 @@ impl Interval {
             Interval::Min15 => Duration::from_millis(MIN_AS_MILI * 15),
             Interval::Hour1 => Duration::from_millis(HOUR_AS_MILI),
             Interval::Day1 => Duration::from_millis(DAY_AS_MILI),
-            Interval::Invalid => Duration::from_millis(0),
         }
     }
 
@@ -38,7 +36,6 @@ impl Interval {
             Interval::Min15 => MIN_AS_MILI * 15,
             Interval::Hour1 => HOUR_AS_MILI,
             Interval::Day1 => DAY_AS_MILI,
-            Interval::Invalid => 0,
         }
     }
 }
@@ -51,7 +48,8 @@ impl TryFrom<&str> for Interval {
             "5m" => Ok(Interval::Min5),
             "15m" => Ok(Interval::Min15),
             "1h" => Ok(Interval::Hour1),
-            _ => Err("Unknown interval string"),
+            "1d" => Ok(Interval::Day1),
+            _ => Err("Unable to parse interval"),
         }
     }
 }
@@ -71,7 +69,6 @@ impl Display for Interval {
             Interval::Min15 => write!(f, "15m"),
             Interval::Hour1 => write!(f, "1h"),
             Interval::Day1 => write!(f, "1d"),
-            Interval::Invalid => write!(f, "INVALID"),
         }
     }
 }
