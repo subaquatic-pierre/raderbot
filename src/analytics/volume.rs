@@ -1,6 +1,6 @@
 use crate::{
     account::trade::OrderSide,
-    market::trade::Trade,
+    market::{interval::Interval, trade::Trade},
     utils::{
         time::{floor_mili_ts, generate_ts, timestamp_to_string, HOUR_AS_MILI, MIN_AS_MILI},
         trade::{calc_min_max, calc_total_volume},
@@ -10,8 +10,6 @@ use crate::{
 use log::{info, warn};
 use serde::Serialize;
 use std::collections::BTreeMap;
-
-use super::interval::Interval;
 
 pub trait TradeVolume {
     fn add_trades(&mut self, trades: &[Trade]);

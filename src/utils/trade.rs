@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use std::{collections::HashMap, fs::File, time::SystemTime};
 use uuid::Uuid;
 
+use crate::analytics::volume::BucketVolume;
 use crate::market::trade::{TradeData, TradeDataMeta};
-use crate::market::volume::BucketVolume;
 use crate::utils::time::generate_ts;
 use crate::{
     account::trade::OrderSide,

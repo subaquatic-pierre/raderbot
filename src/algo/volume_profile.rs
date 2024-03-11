@@ -3,8 +3,8 @@ use serde_json::Value;
 
 use crate::market::kline::Kline;
 
+use crate::analytics::volume::{PriceVolume, TradeVolume};
 use crate::market::trade::Trade;
-use crate::market::volume::{PriceVolume, TradeVolume};
 use crate::strategy::types::AlgoError;
 use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;

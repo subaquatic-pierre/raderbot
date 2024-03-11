@@ -12,9 +12,9 @@ use serde_json::json;
 
 use crate::exchange::types::StreamType;
 
+use crate::analytics::volume::{PriceVolume, TimeVolume, TradeVolume};
 use crate::app::AppState;
 use crate::market::interval::Interval;
-use crate::market::volume::{PriceVolume, TimeVolume, TradeVolume};
 use crate::utils::time::string_to_timestamp;
 
 #[derive(Debug, Deserialize)]

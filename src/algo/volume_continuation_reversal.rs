@@ -8,10 +8,10 @@ use crate::account::trade::OrderSide;
 use crate::market::interval::Interval;
 use crate::market::kline::Kline;
 
-use crate::market::trade::Trade;
-use crate::market::volume::{
+use crate::analytics::volume::{
     BucketVolume, PriceVolume, PriceVolumeData, TimeVolume, TimeVolumeData, TradeVolume,
 };
+use crate::market::trade::Trade;
 use crate::strategy::types::AlgoError;
 use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
 use crate::utils::number::parse_usize_from_value;
