@@ -36,8 +36,10 @@ pub struct BackTest {
     pub signal_manager: SignalManager,
     account: ArcMutex<Account>,
     market: ArcMutex<Market>,
-    period_start_price: f64,
-    period_end_price: f64,
+    start_price: f64,
+    end_price: f64,
+    start_time: Option<String>,
+    end_time: Option<String>,
 }
 
 impl BackTest {
@@ -84,8 +86,10 @@ impl BackTest {
             signal_manager,
             market,
             account,
-            period_end_price: 0.0,
-            period_start_price: 0.0,
+            end_price: 0.0,
+            start_price: 0.0,
+            start_time: None,
+            end_time: None,
         }
     }
 
@@ -97,10 +101,12 @@ impl BackTest {
 
     pub async fn run(&mut self, kline_data: KlineData) {
         if let Some(first) = kline_data.klines().first() {
-            self.period_start_price = first.open
+            self.start_time = Some(timestamp_to_string(first.close_time));
+            self.start_price = first.open
         }
         if let Some(last) = kline_data.klines().last() {
-            self.period_end_price = last.close
+            self.end_time = Some(timestamp_to_string(last.close_time));
+            self.end_price = last.close
         }
 
         for kline in kline_data.klines() {
@@ -173,7 +179,9 @@ impl BackTest {
                 .await
         }
 
-        let info = self.strategy.info().await;
+        let mut info = self.strategy.info().await;
+        info.start_time = self.start_time.clone();
+        info.end_time = self.end_time.clone();
 
         // lock account here to use for rest of method
         // do not lock again
@@ -229,8 +237,8 @@ impl BackTest {
             long_trade_count,
             short_trade_count,
             symbol: self.strategy.symbol.to_string(),
-            period_end_price: self.period_end_price,
-            period_start_price: self.period_start_price,
+            end_price: self.end_price,
+            start_price: self.start_price,
             max_drawdown,
             max_profit,
             // signals: self.strategy.get_signals().await,
