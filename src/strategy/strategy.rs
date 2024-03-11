@@ -21,12 +21,11 @@ use crate::{
     },
     strategy::{
         algorithm::Algorithm,
-        types::{AlgoError, AlgoEvalResult, FirstLastEnum, SignalMessage},
+        signal::{SignalMessage, SignalMessageType},
+        types::{AlgoError, AlgoEvalResult, FirstLastEnum},
     },
     utils::time::{floor_mili_ts, generate_ts, timestamp_to_string, MIN_AS_MILI, SEC_AS_MILI},
 };
-
-use super::types::SignalMessageType;
 
 pub type StrategyId = Uuid;
 

@@ -34,7 +34,7 @@ pub struct LastPeriodData {
     poc: Option<f64>,
 }
 
-pub struct VolumeBreakout {
+pub struct VolumeContinuationReversal {
     klines: Vec<Kline>,
     // period_price_vol: PriceVolume,
     time_vol: TimeVolume,
@@ -45,7 +45,7 @@ pub struct VolumeBreakout {
     last_result: Option<AlgoEvalResult>,
 }
 
-impl VolumeBreakout {
+impl VolumeContinuationReversal {
     pub fn new(params: Value) -> Result<Self, AlgoError> {
         let sma = SimpleMovingAverage::new(10).unwrap();
         Ok(Self {
@@ -124,7 +124,7 @@ impl VolumeBreakout {
     }
 }
 
-impl Algorithm for VolumeBreakout {
+impl Algorithm for VolumeContinuationReversal {
     fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         // get current period
         let new_period = determine_auction_period(&kline);
@@ -176,6 +176,10 @@ impl Algorithm for VolumeBreakout {
                 } = last_data;
 
                 if self.last_result.is_none() {
+                    // info!(
+                    //     "NO LAST TRADE, EVALUATING IN UNKNOWN PERIOD: {kline:?}, VOL: {:?}",
+                    //     cur_vol.result()
+                    // );
                     if first_15_vol.total() > last_15_vol.total() && close_price < open_price {
                         self.last_result = Some(AlgoEvalResult::Sell);
                         return AlgoEvalResult::Sell;
@@ -305,4 +309,29 @@ fn is_within_15_min_of_next_period(kline: &Kline) -> bool {
     let next_period_start = determine_auction_period(&updated_kline);
 
     next_period_start != AuctionPeriod::Unknown
+}
+
+#[derive(Debug, PartialEq)]
+enum AuctionScenario {
+    BearAuctionContinuation,
+    BearAuctionReversal,
+    BullAuctionContinuation,
+    BullAuctionReversal,
+    Undefined, // Used when none of the scenarios match
+}
+
+fn determine_auction_scenario(last_period_data: &LastPeriodData) -> AuctionScenario {
+    let is_bearish = last_period_data.close_price < last_period_data.open_price;
+    let is_bullish = last_period_data.close_price > last_period_data.open_price;
+    let last_15_vol_higher = last_period_data.last_15_vol.buy_volume
+        + last_period_data.last_15_vol.sell_volume
+        > last_period_data.first_15_vol.buy_volume + last_period_data.first_15_vol.sell_volume;
+
+    match (is_bullish, is_bearish, last_15_vol_higher) {
+        (false, true, true) => AuctionScenario::BearAuctionContinuation,
+        (false, true, false) => AuctionScenario::BearAuctionReversal,
+        (true, false, true) => AuctionScenario::BullAuctionContinuation,
+        (true, false, false) => AuctionScenario::BullAuctionReversal,
+        _ => AuctionScenario::Undefined,
+    }
 }

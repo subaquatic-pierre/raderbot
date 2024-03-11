@@ -17,8 +17,8 @@ use crate::{
 };
 
 use super::{
-    volume_breakout::VolumeBreakout, volume_continuation::VolumeContinuation,
-    volume_profile::VolumeProfile,
+    volume_continuation::VolumeContinuation,
+    volume_continuation_reversal::VolumeContinuationReversal, volume_profile::VolumeProfile,
 };
 
 /// A builder for constructing instances of algorithms based on their names and parameters.
@@ -84,8 +84,8 @@ impl AlgoBuilder {
                 let algo = VolumeProfile::new(algorithm_params)?;
                 Ok(Box::new(algo))
             }
-            "VolumeBreakout" => {
-                let algo = VolumeBreakout::new(algorithm_params)?;
+            "VolumeContinuationReversal" => {
+                let algo = VolumeContinuationReversal::new(algorithm_params)?;
                 Ok(Box::new(algo))
             }
             "VolumeContinuation" => {

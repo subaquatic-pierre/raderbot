@@ -303,7 +303,7 @@ fn determine_auction_period(kline: &Kline) -> AuctionPeriod {
 
 fn is_within_15_min_of_next_period(kline: &Kline) -> bool {
     let mut updated_kline = kline.clone();
-    updated_kline.close_time = kline.close_time + (15 * MIN_AS_MILI);
+    updated_kline.close_time = kline.close_time + (5 * MIN_AS_MILI);
 
     // Calculate the start of the next auction period based on the current kline time
     let next_period_start = determine_auction_period(&updated_kline);

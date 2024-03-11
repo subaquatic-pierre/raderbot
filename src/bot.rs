@@ -19,9 +19,9 @@ use crate::{
     },
     strategy::{
         backer::BackTest,
-        signal::SignalManager,
+        signal::{SignalHandler, SignalMessage},
         strategy::{Strategy, StrategyId, StrategyInfo, StrategySettings, StrategySummary},
-        types::{AlgoError, SignalMessage},
+        types::AlgoError,
     },
     utils::{channel::build_arc_channel, json},
 };
@@ -358,7 +358,7 @@ pub struct StrategyManager {
     /// A mapping of strategy IDs to their corresponding strategies.
     strategies: HashMap<StrategyId, Strategy>,
     /// Manages signals for strategies.
-    signal_manager: SignalManager,
+    signal_manager: SignalHandler,
 }
 
 impl StrategyManager {
@@ -368,7 +368,7 @@ impl StrategyManager {
     ///
     /// A new instance of `StrategyManager` with an empty set of strategies and signal manager.
     pub fn new() -> Self {
-        let signal_manager = SignalManager::new();
+        let signal_manager = SignalHandler::new();
 
         Self {
             signal_manager,
@@ -444,7 +444,7 @@ impl StrategyManager {
     /// # Returns
     ///
     /// A reference to the signal manager.
-    pub fn get_signal_manager(&self) -> &SignalManager {
+    pub fn get_signal_manager(&self) -> &SignalHandler {
         &self.signal_manager
     }
 }

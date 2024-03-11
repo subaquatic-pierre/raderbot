@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::exchange::api::ExchangeInfo;
 use crate::strategy::strategy::StrategyId;
-use crate::strategy::types::SignalMessage;
 use crate::{
     account::trade::{OrderSide, Position},
     exchange::api::ExchangeApi,
+    strategy::signal::SignalMessage,
 };
 
 use super::trade::{PositionId, TradeTx};

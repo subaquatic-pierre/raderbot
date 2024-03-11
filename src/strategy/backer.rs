@@ -12,17 +12,15 @@ use crate::{
     market::{kline::KlineData, market::Market, messages::MarketMessage, types::ArcMutex},
     storage::{fs::FsStorage, manager::StorageManager, mongo::MongoDbStorage},
     strategy::{
-        signal::SignalManager,
+        signal::{SignalHandler, SignalMessage, SignalMessageType},
         strategy::{Strategy, StrategySummary},
-        types::{AlgoEvalResult, SignalMessage},
+        types::AlgoEvalResult,
     },
     utils::{
         channel::build_arc_channel,
         time::{timestamp_to_string, SEC_AS_MILI},
     },
 };
-
-use super::{strategy::StrategySignals, types::SignalMessageType};
 
 /// Represents a backtest environment for a trading strategy.
 ///
@@ -33,7 +31,7 @@ use super::{strategy::StrategySignals, types::SignalMessageType};
 pub struct BackTest {
     pub strategy: Strategy,
     pub signals: Vec<SignalMessage>,
-    pub signal_manager: SignalManager,
+    pub signal_manager: SignalHandler,
     account: ArcMutex<Account>,
     market: ArcMutex<Market>,
     start_price: f64,
@@ -77,7 +75,7 @@ impl BackTest {
         // create new storage manager
         let account = ArcMutex::new(Account::new(exchange_api.clone(), false, true).await);
 
-        let mut signal_manager = SignalManager::new();
+        let mut signal_manager = SignalHandler::new();
         signal_manager.add_strategy_settings(&strategy.id, strategy.settings());
 
         Self {

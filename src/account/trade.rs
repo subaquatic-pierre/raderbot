@@ -3,7 +3,8 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    strategy::{strategy::StrategyId, types::SignalMessage},
+    strategy::signal::SignalMessage,
+    strategy::strategy::StrategyId,
     utils::time::{generate_ts, timestamp_to_string},
 };
 

@@ -1,16 +1,17 @@
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, marker};
 
 use log::info;
 
 use crate::{
-    account::{account::Account, trade::Position},
+    account::{
+        account::Account,
+        trade::{OrderSide, Position},
+    },
     market::{market::Market, types::ArcMutex},
 };
 
-use super::{
-    strategy::{StrategyId, StrategySettings},
-    types::SignalMessage,
-};
+use super::strategy::{StrategyId, StrategySettings};
 
 /// Manages the handling of trading signals for active trading strategies.
 ///
@@ -18,12 +19,12 @@ use super::{
 /// based on the strategy's settings and the nature of the incoming signal. It interacts with
 /// both the account to manage positions and the market to fetch current prices.
 
-pub struct SignalManager {
+pub struct SignalHandler {
     active_strategy_settings: HashMap<StrategyId, StrategySettings>,
 }
 
-impl SignalManager {
-    /// Initializes a new `SignalManager` with references to the account and market.
+impl SignalHandler {
+    /// Initializes a new `SignalHandler` with references to the account and market.
     ///
     /// # Arguments
     ///
@@ -32,7 +33,7 @@ impl SignalManager {
     ///
     /// # Returns
     ///
-    /// Returns an instance of `SignalManager`.
+    /// Returns an instance of `SignalHandler`.
 
     pub fn new() -> Self {
         Self {
@@ -176,7 +177,7 @@ impl SignalManager {
     /// * `strategy_id` - The unique identifier of the strategy.
     /// * `settings` - The trading settings for the strategy.
     ///
-    /// This allows the `SignalManager` to enforce strategy-specific trading parameters.
+    /// This allows the `SignalHandler` to enforce strategy-specific trading parameters.
 
     pub fn add_strategy_settings(&mut self, strategy_id: &StrategyId, settings: StrategySettings) {
         self.active_strategy_settings
@@ -194,4 +195,30 @@ impl SignalManager {
     pub fn remove_strategy_settings(&mut self, strategy_id: &StrategyId) {
         self.active_strategy_settings.remove(&strategy_id);
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum SignalMessageType {
+    Standard,
+    ForcedClose(String),
+    StopLoss,
+}
+
+/// Encapsulates a message signaling a trading decision based on a strategy's evaluation.
+///
+/// It contains the strategy's identification, the intended order side (buy/sell), the target trading symbol,
+/// the price at which the signal was generated, a flag indicating if this signal is part of a backtest, and
+/// the timestamp marking when the signal was created.
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SignalMessage {
+    pub strategy_id: StrategyId,
+    pub order_side: OrderSide,
+    pub symbol: String,
+    pub price: f64,
+    pub is_back_test: bool,
+    pub close_time: String,
+    #[serde(rename = "type")]
+    pub ty: SignalMessageType,
+    // pub kline: Kline,
 }
