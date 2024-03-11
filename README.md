@@ -78,7 +78,7 @@ The historical data will need to be placed in this exact directory `~/Projects/B
 ```
    ~/Projects/BinanceData/
       ├── Kline/
-         ├── BTCSTUSDT-5m-2023-12.csv
+         ├── BTCUSDT-5m-2023-12.csv
          ├── ...
          └── ...
       └── MarketTrade/

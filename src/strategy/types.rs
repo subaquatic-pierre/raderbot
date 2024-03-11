@@ -1,6 +1,6 @@
 use std::fmt::{self};
 
-use crate::account::trade::OrderSide;
+use crate::{account::trade::OrderSide, market::kline::Kline};
 use serde::{Deserialize, Serialize};
 use serde_json::Error as SerdeJsonError;
 
@@ -13,13 +13,23 @@ use super::strategy::StrategyId;
 /// the timestamp marking when the signal was created.
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum SignalMessageType {
+    Standard,
+    ForcedClose(String),
+    StopLoss,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SignalMessage {
     pub strategy_id: StrategyId,
     pub order_side: OrderSide,
     pub symbol: String,
     pub price: f64,
     pub is_back_test: bool,
-    pub timestamp: u64,
+    pub close_time: String,
+    #[serde(rename = "type")]
+    pub ty: SignalMessageType,
+    // pub kline: Kline,
 }
 
 /// Outlines the potential outcomes of a trading algorithm's evaluation of market data.

@@ -16,7 +16,10 @@ use crate::{
     utils::time::build_interval,
 };
 
-use super::{volume_breakout::VolumeBreakout, volume_profile::VolumeProfile};
+use super::{
+    volume_breakout::VolumeBreakout, volume_continuation::VolumeContinuation,
+    volume_profile::VolumeProfile,
+};
 
 /// A builder for constructing instances of algorithms based on their names and parameters.
 ///
@@ -83,6 +86,10 @@ impl AlgoBuilder {
             }
             "VolumeBreakout" => {
                 let algo = VolumeBreakout::new(algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "VolumeContinuation" => {
+                let algo = VolumeContinuation::new(algorithm_params)?;
                 Ok(Box::new(algo))
             }
             _ => Err(AlgoError::UnkownName(

@@ -93,8 +93,8 @@ async fn load_klines(
                     if let Err(e) = storage_manager.save_klines(&klines, &kline_key, true).await {
                         let msg = format!("Unable to save klines: {e}");
                         info!("{msg}");
-                        let json_data = json!({ "error": msg });
-                        return HttpResponse::Ok().json(json_data);
+                        // let json_data = json!({ "error": msg });
+                        // return HttpResponse::Ok().json(json_data);
                     }
                 }
                 Err(e) => {
@@ -126,7 +126,7 @@ async fn bootstrap_historical_trades(
 
     let user_dirs = UserDirs::new().expect("Failed to get user directories");
     let home_dir = user_dirs.home_dir();
-    let data_dir = home_dir.join("Projects/BinanceData/Trade");
+    let data_dir = home_dir.join("Projects/BinanceData/MarketTrade");
 
     let org_entries = fs::read_dir(data_dir).unwrap();
 

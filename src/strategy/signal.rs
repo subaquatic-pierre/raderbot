@@ -93,11 +93,19 @@ impl SignalManager {
             if signal.order_side != last.order_side {
                 if let Some(close_price) = trigger_price {
                     for position in &active_positions {
-                        account
-                            .lock()
-                            .await
-                            .close_position(position.id, close_price)
-                            .await;
+                        let mut account = account.lock().await;
+
+                        let tx = account.close_position(position.id, close_price).await;
+
+                        let position_id = if let Some(tx) = tx {
+                            Some(tx.position.id)
+                        } else {
+                            None
+                        };
+
+                        if let Some(id) = position_id {
+                            account.add_position_meta(id, &signal)
+                        }
                     }
                 }
 
@@ -105,9 +113,9 @@ impl SignalManager {
             // open position
             } else if active_positions.len() < settings.max_open_orders as usize {
                 if let Some(close_price) = trigger_price {
-                    account
-                        .lock()
-                        .await
+                    let mut account = account.lock().await;
+
+                    let position = account
                         .open_position(
                             &signal.symbol,
                             settings.margin_usd,
@@ -118,15 +126,25 @@ impl SignalManager {
                             None,
                         )
                         .await;
+
+                    let position_id = if let Some(position) = position {
+                        Some(position.id)
+                    } else {
+                        None
+                    };
+
+                    if let Some(id) = position_id {
+                        account.add_position_meta(id, &signal)
+                    }
                 }
             }
 
         // no open positions yet for given strategy
         } else {
             if let Some(last_price) = trigger_price {
-                account
-                    .lock()
-                    .await
+                let mut account = account.lock().await;
+
+                let position = account
                     .open_position(
                         &signal.symbol,
                         settings.margin_usd,
@@ -137,6 +155,16 @@ impl SignalManager {
                         None,
                     )
                     .await;
+
+                let position_id = if let Some(position) = position {
+                    Some(position.id)
+                } else {
+                    None
+                };
+
+                if let Some(id) = position_id {
+                    account.add_position_meta(id, &signal)
+                }
             }
         }
     }

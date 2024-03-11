@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     account::{
         account::Account,
-        trade::{OrderSide, Position, TradeTx},
+        trade::{OrderSide, Position, PositionId, TradeTx},
     },
     algo::builder::AlgoBuilder,
     market::{
@@ -26,7 +26,23 @@ use crate::{
     utils::time::{floor_mili_ts, generate_ts, timestamp_to_string, MIN_AS_MILI, SEC_AS_MILI},
 };
 
+use super::types::SignalMessageType;
+
 pub type StrategyId = Uuid;
+
+pub struct StrategySignals {
+    pub signals: Vec<SignalMessage>,
+}
+
+impl StrategySignals {
+    pub fn new() -> Self {
+        Self { signals: vec![] }
+    }
+
+    pub fn add_signal(&mut self, signal: &SignalMessage) {
+        self.signals.push(signal.clone())
+    }
+}
 
 /// Manages the execution and lifecycle of trading strategies.
 ///
@@ -47,6 +63,7 @@ pub struct Strategy {
     end_time: Option<String>,
     kline_manager: ArcMutex<StrategyKlineManager>,
     running: bool,
+    signals: ArcMutex<StrategySignals>,
 }
 
 impl Strategy {
@@ -90,6 +107,7 @@ impl Strategy {
             end_time: None,
             kline_manager: ArcMutex::new(StrategyKlineManager::new()),
             running: false,
+            signals: ArcMutex::new(StrategySignals::new()),
         })
     }
 
@@ -112,6 +130,7 @@ impl Strategy {
 
         let market = self.market.clone();
         let kline_manager = self.kline_manager.clone();
+        let signals = self.signals.clone();
 
         tokio::spawn(async move {
             // let market = market.clone();
@@ -160,7 +179,7 @@ impl Strategy {
                                 .trade_data_range(
                                     &symbol,
                                     // get 5 seconds in passed to ensure all trades
-                                    Some(kline.open_time - SEC_AS_MILI * 5),
+                                    Some(kline.open_time),
                                     Some(kline.close_time),
                                     None,
                                 )
@@ -197,8 +216,11 @@ impl Strategy {
                         symbol: symbol.clone(),
                         price: kline.close,
                         is_back_test: false,
-                        timestamp: kline.close_time,
+                        close_time: timestamp_to_string(kline.close_time),
+                        ty: SignalMessageType::Standard,
                     };
+
+                    signals.lock().await.add_signal(&signal);
 
                     if strategy_tx.is_closed() {
                         break;
@@ -252,11 +274,24 @@ impl Strategy {
                     .last_price(&position.symbol)
                     .await
                 {
-                    account
-                        .lock()
-                        .await
-                        .close_position(position.id, close_price)
-                        .await;
+                    let mut account = account.lock().await;
+                    let trade = account.close_position(position.id, close_price).await;
+
+                    if let Some(trade) = trade.cloned() {
+                        let signal = SignalMessage {
+                            strategy_id: self.id,
+                            order_side: trade.position.order_side,
+                            symbol: trade.position.symbol,
+                            price: trade.close_price,
+                            is_back_test: true,
+                            close_time: trade.close_time,
+                            ty: SignalMessageType::ForcedClose(
+                                "Closed Remaining Positions".to_string(),
+                            ),
+                        };
+
+                        account.add_position_meta(trade.position.id, &signal)
+                    }
                 }
             }
         }
@@ -266,7 +301,24 @@ impl Strategy {
         self.end_time = Some(timestamp_to_string(generate_ts()));
         self.running = false;
 
-        self.calc_summary(&trades, &positions).await
+        let signals = Strategy::get_position_meta(account, &positions).await;
+
+        self.calc_summary(&trades, &positions, &signals).await
+    }
+
+    pub async fn get_position_meta(
+        account: ArcMutex<Account>,
+        positions: &Vec<Position>,
+    ) -> HashMap<PositionId, Vec<SignalMessage>> {
+        let mut signals = HashMap::new();
+
+        for position in positions {
+            if let Some(pos_signals) = account.lock().await.get_position_meta(position.id) {
+                signals.insert(position.id, pos_signals);
+            }
+        }
+
+        signals
     }
 
     /// Generates a summary of the strategy's performance.
@@ -281,7 +333,9 @@ impl Strategy {
 
     pub async fn summary(&self, account: ArcMutex<Account>) -> StrategySummary {
         let (positions, trades) = account.lock().await.strategy_positions_trades(self.id);
-        self.calc_summary(&trades, &positions).await
+
+        let signals = Strategy::get_position_meta(account, &positions).await;
+        self.calc_summary(&trades, &positions, &signals).await
     }
 
     /// Retrieves the settings for the strategy.
@@ -348,9 +402,13 @@ impl Strategy {
         }
     }
 
-    // ---
-    // Private Methods
-    // ---
+    pub async fn get_signals(&self) -> Vec<SignalMessage> {
+        self.signals.lock().await.signals.clone()
+    }
+
+    pub async fn add_signal(&self, signal: &SignalMessage) {
+        self.signals.lock().await.add_signal(signal);
+    }
 
     /// Calculates the summary of the strategy's performance including profit, drawdown, trade counts, and more.
     ///
@@ -371,6 +429,7 @@ impl Strategy {
         &self,
         trades: &Vec<TradeTx>,
         positions: &Vec<Position>,
+        signals: &HashMap<PositionId, Vec<SignalMessage>>,
     ) -> StrategySummary {
         let max_profit = Strategy::calc_max_profit(&trades);
         let max_drawdown = Strategy::calc_max_drawdown(&trades);
@@ -397,21 +456,29 @@ impl Strategy {
             None => 0.0,
         };
 
+        let mut trades = trades.clone();
+
+        for trade in trades.iter_mut() {
+            if let Some(pos_meta) = signals.get(&trade.position.id) {
+                for signal in pos_meta {
+                    trade.add_signal(signal);
+                }
+            }
+        }
+
         StrategySummary {
             info: self.info().await,
             profit: profit,
-            trades: trades.clone(),
+            trades: trades,
             positions: positions.clone(),
             long_trade_count,
             short_trade_count,
-            // signals,
-            // // buy_signal_count,
-            // sell_signal_count,
             symbol: self.symbol.to_string(),
             period_end_price: end_price,
             period_start_price: start_price,
             max_drawdown,
             max_profit,
+            // signals: self.get_signals().await,
         }
     }
 
@@ -437,8 +504,7 @@ impl Strategy {
         let mut current_balance = 0.0;
 
         for trade_tx in trades {
-            let profit = trade_tx.calc_profit();
-            current_balance += profit;
+            current_balance += trade_tx.profit;
 
             if current_balance > max_balance {
                 max_balance = current_balance;
@@ -469,8 +535,7 @@ impl Strategy {
         trades.sort_by(|a, b| a.close_time.cmp(&b.close_time));
 
         for trade_tx in trades {
-            let profit = trade_tx.calc_profit();
-            current_balance += profit;
+            current_balance += trade_tx.profit;
 
             if current_balance <= min_balance {
                 min_balance = current_balance;
@@ -515,7 +580,7 @@ impl Strategy {
     /// Returns a `f64` representing the total profit or loss.
 
     pub fn calc_profit(trades: &Vec<TradeTx>) -> f64 {
-        trades.iter().map(|trade| trade.calc_profit()).sum()
+        trades.iter().map(|trade| trade.profit).sum()
     }
 }
 
@@ -598,18 +663,16 @@ impl Default for StrategySettings {
 pub struct StrategySummary {
     pub info: StrategyInfo,
     pub profit: f64,
-    pub trades: Vec<TradeTx>,
-    pub positions: Vec<Position>,
-    // pub signals: Vec<SignalMessage>,
     pub long_trade_count: usize,
     pub short_trade_count: usize,
-    // pub buy_signal_count: usize,
-    // pub sell_signal_count: usize,
     pub period_start_price: f64,
     pub period_end_price: f64,
     pub symbol: String,
     pub max_drawdown: f64,
     pub max_profit: f64,
+    // pub signals: Vec<SignalMessage>,
+    pub trades: Vec<TradeTx>,
+    pub positions: Vec<Position>,
 }
 
 /// Sets default values for `StrategySummary`.
@@ -631,6 +694,7 @@ impl Default for StrategySummary {
             symbol: "".to_string(),
             max_drawdown: 0.0,
             max_profit: 0.0,
+            // signals: vec![],
         }
     }
 }

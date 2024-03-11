@@ -9,4 +9,5 @@ pub mod rsi;
 pub mod rsi_ema_sma;
 pub mod template;
 pub mod volume_breakout;
+pub mod volume_continuation;
 pub mod volume_profile;

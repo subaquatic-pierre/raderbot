@@ -1,10 +1,12 @@
 use std::collections::hash_map::Values;
 use std::{collections::HashMap, sync::Arc};
 
+use log::info;
 use serde::{Deserialize, Serialize};
 
 use crate::exchange::api::ExchangeInfo;
 use crate::strategy::strategy::StrategyId;
+use crate::strategy::types::SignalMessage;
 use crate::{
     account::trade::{OrderSide, Position},
     exchange::api::ExchangeApi,
@@ -22,6 +24,7 @@ pub struct Account {
     exchange_api: Arc<dyn ExchangeApi>,
     /// A flag indicating whether the account is in dry run mode.
     dry_run: bool,
+    position_signals: HashMap<PositionId, Vec<SignalMessage>>,
 }
 
 impl Account {
@@ -47,6 +50,7 @@ impl Account {
             positions: HashMap::new(),
             trades: vec![],
             dry_run,
+            position_signals: HashMap::new(),
         };
 
         if init_workers {
@@ -114,7 +118,7 @@ impl Account {
         &mut self,
         position_id: PositionId,
         close_price: f64,
-    ) -> Option<&TradeTx> {
+    ) -> Option<&mut TradeTx> {
         if let Some(position) = self.positions.get(&position_id).cloned() {
             if let Ok(trade_tx) = self
                 .exchange_api
@@ -127,13 +131,22 @@ impl Account {
 
                 self.trades.push(trade_tx);
 
-                if let Some(tx) = self.trades.iter().find(|e| e.id == trade_tx_id) {
+                if let Some(tx) = self.trades.iter_mut().find(|e| e.id == trade_tx_id) {
                     return Some(tx);
                 }
             };
         };
 
         None
+    }
+
+    pub fn add_position_meta(&mut self, position_id: PositionId, signal: &SignalMessage) {
+        let signals = self.position_signals.entry(position_id).or_insert(vec![]);
+        signals.push(signal.clone())
+    }
+
+    pub fn get_position_meta(&mut self, position_id: PositionId) -> Option<Vec<SignalMessage>> {
+        self.position_signals.get(&position_id).cloned()
     }
 
     /// Returns an iterator over the account's positions.

@@ -3,13 +3,18 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    strategy::strategy::StrategyId,
+    strategy::{strategy::StrategyId, types::SignalMessage},
     utils::time::{generate_ts, timestamp_to_string},
 };
 
 use uuid::Uuid;
 
 pub type PositionId = Uuid;
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct TradeTxMeta {
+    pub signals: Vec<SignalMessage>,
+}
 
 /// Enum representing the side of an order (Buy or Sell).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
@@ -129,12 +134,14 @@ impl Position {
 pub struct TradeTx {
     /// The unique identifier of the trade transaction.
     pub id: Uuid,
+    pub profit: f64,
     /// The time when the position was closed.
     pub close_time: String,
     /// The price at which the position was closed.
     pub close_price: f64,
     /// The position associated with the trade transaction.
     pub position: Position,
+    pub meta: Option<TradeTxMeta>,
 }
 impl TradeTx {
     /// Creates a new trade transaction with the given parameters.
@@ -150,11 +157,24 @@ impl TradeTx {
     /// A new `TradeTx` instance.
 
     pub fn new(close_price: f64, close_time: u64, position: Position) -> Self {
+        let profit = TradeTx::calc_profit(close_price, &position);
         Self {
             id: Uuid::new_v4(),
             close_price,
+            profit,
             close_time: timestamp_to_string(close_time),
             position,
+            meta: None,
+        }
+    }
+
+    pub fn add_signal(&mut self, signal: &SignalMessage) {
+        if let Some(meta) = &mut self.meta {
+            meta.signals.push(signal.clone())
+        } else {
+            self.meta = Some(TradeTxMeta {
+                signals: vec![signal.clone()],
+            })
         }
     }
 
@@ -164,10 +184,19 @@ impl TradeTx {
     ///
     /// The profit of the trade transaction.
 
-    pub fn calc_profit(&self) -> f64 {
-        let total_open_usd = self.position.open_price * self.position.quantity;
-        let total_close_usd = self.close_price * self.position.quantity;
-        match self.position.order_side {
+    // pub fn calc_profit(&self) -> f64 {
+    //     let total_open_usd = self.position.open_price * self.position.quantity;
+    //     let total_close_usd = self.close_price * self.position.quantity;
+    //     match self.position.order_side {
+    //         OrderSide::Buy => total_close_usd - total_open_usd,
+    //         OrderSide::Sell => total_open_usd - total_close_usd,
+    //     }
+    // }
+
+    pub fn calc_profit(close_price: f64, position: &Position) -> f64 {
+        let total_open_usd = position.open_price * position.quantity;
+        let total_close_usd = close_price * position.quantity;
+        match position.order_side {
             OrderSide::Buy => total_close_usd - total_open_usd,
             OrderSide::Sell => total_open_usd - total_close_usd,
         }
@@ -210,6 +239,21 @@ mod test {
     }
 
     #[test]
+    async fn position_set_stop_loss() {
+        let mut position = Position::new("ETHUSD", 2000.0, OrderSide::Sell, 500.0, 5, None);
+        position.set_stop_loss(Some(1900.0));
+        assert_eq!(position.stop_loss, Some(1900.0));
+    }
+
+    #[test]
+    async fn position_set_strategy_id() {
+        let mut position = Position::new("ETHUSD", 2000.0, OrderSide::Sell, 500.0, 5, None);
+        let strategy_id = StrategyId::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
+        position.set_strategy_id(Some(strategy_id));
+        assert_eq!(position.strategy_id, Some(strategy_id));
+    }
+
+    #[test]
     async fn test_trade_tx_new() {
         let close_price = 51000.0;
         let close_time = generate_ts();
@@ -228,6 +272,27 @@ mod test {
 
         // Assert that calc_profit calculates correctly
         let expected_profit = (close_price - position.open_price) * position.quantity;
-        assert_eq!(trade_tx.calc_profit(), expected_profit);
+        assert_eq!(
+            TradeTx::calc_profit(close_price, &position),
+            expected_profit
+        );
+    }
+
+    #[test]
+    async fn calc_profit_edge_cases() {
+        let position_zero_qty = Position {
+            id: Uuid::new_v4(),
+            symbol: "BTCUSD".to_string(),
+            order_side: OrderSide::Buy,
+            open_time: "2021-01-01T00:00:00Z".to_string(),
+            open_price: 50000.0,
+            quantity: 0.0,
+            margin_usd: 0.0,
+            leverage: 10,
+            strategy_id: None,
+            stop_loss: None,
+        };
+        let trade_tx_zero_qty = TradeTx::new(51000.0, generate_ts(), position_zero_qty);
+        assert_eq!(trade_tx_zero_qty.profit, 0.0);
     }
 }

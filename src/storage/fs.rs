@@ -266,11 +266,8 @@ impl StorageManager for FsStorage {
                     .from_path(&file_path)?;
 
                 // Read existing klines into a vector
-                let mut existing_klines: Vec<Kline> =
+                let existing_klines: Vec<Kline> =
                     reader.deserialize().collect::<Result<Vec<Kline>, _>>()?;
-
-                // sort klines by open_time
-                existing_klines.sort_by_key(|k| k.open_time);
 
                 // add existing klines to klines to save
                 for kline in existing_klines {
@@ -278,7 +275,7 @@ impl StorageManager for FsStorage {
                 }
             }
 
-            // add fresh klines to klines to save
+            // append any left over klines in month, ensure no duplicates with BTreeMap
             for kline in klines {
                 klines_to_save.insert(kline.open_time, kline);
             }
@@ -473,7 +470,7 @@ impl StorageManager for FsStorage {
         &self,
         trades: &[Trade],
         trade_key: &str,
-        _is_bootstrap: bool,
+        is_bootstrap: bool,
     ) -> io::Result<()> {
         // Build market directory and subdirectory for klines
         let mut market_dir = self.data_directory.join("market");
@@ -481,6 +478,7 @@ impl StorageManager for FsStorage {
         std::fs::create_dir_all(&market_dir)?;
 
         let mut trades_by_day: HashMap<u64, Vec<Trade>> = HashMap::new();
+
         for trade in trades {
             let ts = floor_mili_ts(trade.timestamp, DAY_AS_MILI);
             if let Some(trades) = trades_by_day.get_mut(&ts) {
@@ -490,10 +488,11 @@ impl StorageManager for FsStorage {
             }
         }
 
-        for (trade_ts, mut trades) in trades_by_day {
+        for (trade_ts, trades) in trades_by_day {
+            let mut trades_to_save = BTreeMap::new();
+
             // Build file path
             let trade_filename = build_market_trade_filename(trade_key, trade_ts);
-            let mut trades_to_save = vec![];
 
             let file_path = market_dir.join(trade_filename);
 
@@ -503,21 +502,16 @@ impl StorageManager for FsStorage {
                     .from_path(&file_path)?;
 
                 // Read existing klines into a vector
-                let mut existing_trades: Vec<Trade> =
+                let existing_trades: Vec<Trade> =
                     reader.deserialize().collect::<Result<Vec<Trade>, _>>()?;
 
-                // sort klines by open_time
-                existing_trades.sort_by_key(|k| k.timestamp);
-                trades.sort_by_key(|k| k.timestamp);
-
-                let merged = self._merge_trades(&existing_trades, &trades);
-
-                trades_to_save.extend_from_slice(&merged);
-            } else {
-                trades_to_save.extend_from_slice(&trades);
+                for trade in existing_trades {
+                    trades_to_save.insert(trade.timestamp, trade);
+                }
             }
 
             let file = OpenOptions::new()
+                .append(!is_bootstrap)
                 .write(true)
                 .create(true)
                 .open(&file_path)?;
@@ -526,8 +520,13 @@ impl StorageManager for FsStorage {
                 .has_headers(false)
                 .from_writer(file);
 
-            for kline in trades_to_save {
-                writer.serialize(kline)?
+            // append any left over trades in day, ensure no duplicates with BTreeMap
+            for trade in trades {
+                trades_to_save.insert(trade.timestamp, trade);
+            }
+
+            for trade in trades_to_save.values() {
+                writer.serialize(trade)?
             }
 
             writer.flush()?

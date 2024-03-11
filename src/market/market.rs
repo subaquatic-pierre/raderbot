@@ -622,6 +622,22 @@ impl MarketData {
             None => vec![],
         };
 
+        // return early if all timestamps reached
+        if let (Some(from_ts), Some(to_ts)) = (from_ts, to_ts) {
+            if let (Some(first), Some(last)) = (in_mem_kline.first(), in_mem_kline.last()) {
+                if floor_mili_ts(from_ts, SEC_AS_MILI)
+                    == floor_mili_ts(first.open_time, SEC_AS_MILI)
+                    && floor_mili_ts(to_ts, SEC_AS_MILI)
+                        == floor_mili_ts(last.close_time, SEC_AS_MILI)
+                {
+                    for kline in in_mem_kline {
+                        kline_data.add_kline(kline)
+                    }
+                    return Some(kline_data);
+                }
+            }
+        }
+
         let mut filtered_klines = self
             .storage_manager
             .get_klines(symbol, interval, from_ts, to_ts)
@@ -747,10 +763,12 @@ impl MarketData {
             for (key, kline_data) in self.all_klines.iter_mut() {
                 let klines = kline_data.drain_klines(self.last_backup);
                 if klines.len() > 0 {
-                    self.storage_manager
-                        .save_klines(&klines, key, false)
-                        .await
-                        .expect("Unable to save Klines");
+                    match self.storage_manager.save_klines(&klines, key, false).await {
+                        Ok(_res) => {}
+                        Err(e) => {
+                            info!("Unable to save Klines: {e}");
+                        }
+                    }
                 }
             }
 

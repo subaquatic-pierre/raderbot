@@ -11,6 +11,8 @@ use log::{info, warn};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+use super::interval::Interval;
+
 pub trait TradeVolume {
     fn add_trades(&mut self, trades: &[Trade]);
     fn result(&self) -> impl Serialize;
@@ -156,10 +158,23 @@ impl TradeVolume for PriceVolume {
     }
 }
 
-#[derive(Serialize, Default, Clone, Debug)]
+#[derive(Serialize, Default, Clone, Debug, Copy)]
 pub struct BucketVolume {
     pub buy_volume: f64,
     pub sell_volume: f64,
+}
+
+impl BucketVolume {
+    pub fn new() -> Self {
+        Self {
+            buy_volume: 0.0,
+            sell_volume: 0.0,
+        }
+    }
+
+    pub fn total(&self) -> f64 {
+        self.buy_volume + self.sell_volume
+    }
 }
 
 #[derive(Serialize, Debug)]
@@ -192,19 +207,61 @@ impl Default for PriceVolumeData {
 }
 
 pub struct TimeVolume {
-    pub interval: String,
+    pub interval: Interval,
     pub buckets: BTreeMap<String, BucketVolume>,
+    pub min_price: f64,
+    pub max_price: f64,
     start_time: u64,
     end_time: u64,
 }
 
 impl TimeVolume {
-    pub fn new(interval: &str) -> Self {
+    pub fn new(interval: Interval) -> Self {
         Self {
-            interval: interval.to_string(),
+            interval: interval,
             buckets: BTreeMap::new(),
             start_time: u64::MAX,
             end_time: 0,
+            min_price: 0.0,
+            max_price: 0.0,
+        }
+    }
+
+    pub fn n_vol(&self, reverse: bool, n_buckets: usize) -> BucketVolume {
+        let mut bucket_vol = BucketVolume::new();
+
+        if reverse {
+            for bucket in self.buckets.values().rev().take(n_buckets) {
+                bucket_vol.buy_volume += bucket.buy_volume;
+                bucket_vol.sell_volume += bucket.sell_volume;
+            }
+        } else {
+            for bucket in self.buckets.values().take(n_buckets) {
+                bucket_vol.buy_volume += bucket.buy_volume;
+                bucket_vol.sell_volume += bucket.sell_volume;
+            }
+        }
+
+        bucket_vol
+    }
+
+    pub fn reset_volumes(&mut self) {
+        self.buckets = BTreeMap::new();
+        self.start_time = u64::MAX;
+        self.end_time = 0;
+    }
+
+    pub fn average_volume(&self) -> BucketVolume {
+        let mut buy_avg = 0.0;
+        let mut sell_avg = 0.0;
+        for b in self.buckets.values() {
+            buy_avg += b.buy_volume;
+            sell_avg += b.sell_volume;
+        }
+
+        BucketVolume {
+            buy_volume: buy_avg / self.buckets.len() as f64,
+            sell_volume: sell_avg / self.buckets.len() as f64,
         }
     }
 
@@ -224,13 +281,7 @@ impl TimeVolume {
 
     fn add_trade_by_time(&mut self, trades: &[Trade]) {
         for trade in trades {
-            let timestamp = match self.interval.as_str() {
-                "1m" => floor_mili_ts(trade.timestamp, 1 * MIN_AS_MILI),
-                "5m" => floor_mili_ts(trade.timestamp, 5 * MIN_AS_MILI),
-                "15m" => floor_mili_ts(trade.timestamp, 15 * MIN_AS_MILI),
-                "1h" => floor_mili_ts(trade.timestamp, HOUR_AS_MILI),
-                _ => floor_mili_ts(trade.timestamp, HOUR_AS_MILI),
-            };
+            let timestamp = floor_mili_ts(trade.timestamp, self.interval.to_mili());
 
             let bucket_key_str = timestamp_to_string(timestamp);
 
@@ -245,12 +296,25 @@ impl TimeVolume {
             }
         }
     }
+
+    fn update_min_max_price(&mut self, trades: &[Trade]) {
+        let (min, max) = calc_min_max(trades);
+
+        if min < self.min_price || self.buckets.len() == 0 {
+            self.min_price = min
+        }
+
+        if max > self.max_price {
+            self.max_price = max
+        }
+    }
 }
 
 impl TradeVolume for TimeVolume {
     fn add_trades(&mut self, trades: &[Trade]) {
         self.add_trade_by_time(trades);
-        self.update_times(trades)
+        self.update_times(trades);
+        self.update_min_max_price(trades);
     }
 
     fn result(&self) -> TimeVolumeData {
@@ -262,6 +326,9 @@ impl TradeVolume for TimeVolume {
             end_time: timestamp_to_string(self.end_time),
             total_volume,
             buckets: self.buckets.clone(),
+            average_volume: self.average_volume(),
+            min_price: self.min_price,
+            max_price: self.max_price,
         }
     }
 }
@@ -273,4 +340,22 @@ pub struct TimeVolumeData {
     pub end_time: String,
     pub total_volume: BucketVolume,
     pub buckets: BTreeMap<String, BucketVolume>,
+    pub average_volume: BucketVolume,
+    pub min_price: f64,
+    pub max_price: f64,
+}
+
+impl Default for TimeVolumeData {
+    fn default() -> Self {
+        Self {
+            num_buckets: 0,
+            buckets: BTreeMap::new(),
+            start_time: timestamp_to_string(generate_ts()),
+            end_time: timestamp_to_string(generate_ts()),
+            total_volume: BucketVolume::default(),
+            average_volume: BucketVolume::default(),
+            min_price: 0.0,
+            max_price: 0.0,
+        }
+    }
 }

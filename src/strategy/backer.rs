@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use actix_web::rt::signal;
 use log::info;
 
 use crate::{
@@ -15,8 +16,13 @@ use crate::{
         strategy::{Strategy, StrategySummary},
         types::{AlgoEvalResult, SignalMessage},
     },
-    utils::{channel::build_arc_channel, time::SEC_AS_MILI},
+    utils::{
+        channel::build_arc_channel,
+        time::{timestamp_to_string, SEC_AS_MILI},
+    },
 };
+
+use super::{strategy::StrategySignals, types::SignalMessageType};
 
 /// Represents a backtest environment for a trading strategy.
 ///
@@ -109,7 +115,7 @@ impl BackTest {
                     .trade_data_range(
                         &self.strategy.symbol,
                         // get 5 seconds in passed to ensure all trades
-                        Some(kline.open_time - SEC_AS_MILI * 5),
+                        Some(kline.open_time),
                         Some(kline.close_time),
                         None,
                     )
@@ -144,21 +150,13 @@ impl BackTest {
                 symbol: self.strategy.symbol.to_string(),
                 price: kline.close.clone(),
                 is_back_test: true,
-                timestamp: kline.close_time,
+                close_time: timestamp_to_string(kline.close_time),
+                ty: SignalMessageType::Standard,
+                // kline: kline.clone(),
             };
 
-            self.add_signal(signal)
+            self.strategy.add_signal(&signal).await
         }
-    }
-
-    /// Adds a trading signal to the backtest.
-    ///
-    /// # Arguments
-    ///
-    /// * `signal` - The trading signal to add.
-
-    pub fn add_signal(&mut self, signal: SignalMessage) {
-        self.signals.push(signal)
     }
 
     /// Computes and returns a summary of the backtest results.
@@ -169,7 +167,7 @@ impl BackTest {
     /// trade counts, and other relevant metrics.
 
     pub async fn result(&mut self) -> StrategySummary {
-        for signal in &self.signals {
+        for signal in &self.strategy.get_signals().await {
             self.signal_manager
                 .handle_signal(signal.clone(), self.market.clone(), self.account.clone())
                 .await
@@ -177,10 +175,11 @@ impl BackTest {
 
         let info = self.strategy.info().await;
 
-        let active_positions: Vec<(PositionId, f64)> = self
-            .account
-            .lock()
-            .await
+        // lock account here to use for rest of method
+        // do not lock again
+        let mut account = self.account.lock().await;
+
+        let active_positions: Vec<(PositionId, f64)> = account
             .positions()
             .into_iter()
             .map(|item| (item.id, item.open_price))
@@ -188,15 +187,33 @@ impl BackTest {
 
         // close any remaining positions
         for (id, open_price) in active_positions {
-            self.account
-                .lock()
-                .await
-                .close_position(id, open_price)
-                .await;
+            let trade = account.close_position(id, open_price).await;
+
+            if let Some(trade) = trade.cloned() {
+                let signal = SignalMessage {
+                    strategy_id: self.strategy.id,
+                    order_side: trade.position.order_side,
+                    symbol: trade.position.symbol,
+                    price: trade.close_price,
+                    is_back_test: true,
+                    close_time: trade.close_time,
+                    ty: SignalMessageType::ForcedClose("Closed Remaining Positions".to_string()),
+                };
+
+                account.add_position_meta(id, &signal)
+            }
         }
 
         // get all trade txs
-        let trades: Vec<TradeTx> = self.account.lock().await.trades();
+        let mut trades: Vec<TradeTx> = account.trades();
+
+        for trade in trades.iter_mut() {
+            if let Some(signals) = account.get_position_meta(trade.position.id) {
+                for signal in signals {
+                    trade.add_signal(&signal);
+                }
+            }
+        }
 
         let max_profit = Strategy::calc_max_profit(&trades);
         let max_drawdown = Strategy::calc_max_drawdown(&trades);
@@ -211,14 +228,12 @@ impl BackTest {
             positions: vec![],
             long_trade_count,
             short_trade_count,
-            // signals,
-            // // buy_signal_count,
-            // sell_signal_count,
             symbol: self.strategy.symbol.to_string(),
             period_end_price: self.period_end_price,
             period_start_price: self.period_start_price,
             max_drawdown,
             max_profit,
+            // signals: self.strategy.get_signals().await,
         }
     }
 }

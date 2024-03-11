@@ -67,21 +67,23 @@ pub fn load_binance_klines(
     let mut klines = vec![];
 
     for result in reader.deserialize::<BinanceKline>() {
-        let binance_kline: BinanceKline =
-            result.unwrap_or_else(|_| panic!("Unable to read Kline in file: {}", filepath_str));
-
-        let kline = Kline {
-            symbol: symbol.to_string(),
-            interval: interval,
-            open_time: binance_kline.open_time,
-            open: binance_kline.open,
-            high: binance_kline.high,
-            low: binance_kline.low,
-            close: binance_kline.close,
-            volume: binance_kline.volume,
-            close_time: binance_kline.close_time,
-        };
-        klines.push(kline);
+        match result {
+            Ok(binance_kline) => {
+                let kline = Kline {
+                    symbol: symbol.to_string(),
+                    interval: interval,
+                    open_time: binance_kline.open_time,
+                    open: binance_kline.open,
+                    high: binance_kline.high,
+                    low: binance_kline.low,
+                    close: binance_kline.close,
+                    volume: binance_kline.volume,
+                    close_time: binance_kline.close_time,
+                };
+                klines.push(kline);
+            }
+            Err(e) => info!("Error loading BinanceKline: {e}"),
+        }
     }
 
     klines

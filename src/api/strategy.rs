@@ -287,6 +287,7 @@ pub struct RunBackTestParams {
     interval: Interval,
     margin: Option<f64>,
     leverage: Option<u32>,
+    max_open_orders: Option<u32>,
     from_ts: String,
     to_ts: String,
 }
@@ -297,7 +298,7 @@ async fn run_back_test(
 ) -> impl Responder {
     let bot = app_data.bot.clone();
     let settings = StrategySettings {
-        max_open_orders: 2,
+        max_open_orders: body.max_open_orders.unwrap_or_else(|| 1),
         margin_usd: body.margin.unwrap_or_else(|| 1000.0),
         leverage: body.leverage.unwrap_or_else(|| 10),
         stop_loss: None,

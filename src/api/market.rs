@@ -128,7 +128,7 @@ struct GetMarketVolumeParams {
     to_ts: Option<String>,
     limit: Option<usize>,
     bucket_size: Option<f64>,
-    time_interval: Option<String>,
+    time_interval: Option<Interval>,
     fixed_price: Option<bool>,
 }
 
@@ -169,8 +169,8 @@ async fn get_volume_data(
         .await;
 
     if let Some(trade_data) = trade_data {
-        if let Some(interval) = &body.time_interval {
-            let mut market_volume = TimeVolume::new(&interval);
+        if let Some(interval) = body.time_interval {
+            let mut market_volume = TimeVolume::new(interval);
             market_volume.add_trades(&trade_data.trades());
             let bucket_volume = market_volume.result();
 

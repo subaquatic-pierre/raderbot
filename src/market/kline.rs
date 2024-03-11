@@ -12,14 +12,16 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
+    account::trade::OrderSide,
     exchange::types::ApiResult,
-    market::interval::Interval,
-    market::market::MarketDataSymbol,
+    market::{interval::Interval, market::MarketDataSymbol},
     utils::{
         number::parse_f64_from_lookup,
         time::{calculate_kline_open_time, generate_ts, timestamp_to_string},
     },
 };
+
+use super::trade::Trade;
 
 /// Represents metadata for a series of klines, including the symbol, interval, length, and last update timestamp.
 ///
@@ -137,6 +139,28 @@ impl Kline {
     /// Constructs a kline from a lookup hashmap containing kline data from Binance.
     ///
     /// This method is responsible for parsing the kline data provided by Binance's API and constructing a `Kline` instance.
+
+    pub fn make_trades(&self) -> Vec<Trade> {
+        let trade_sell = Trade {
+            symbol: self.symbol.to_string(),
+            timestamp: self.close_time,
+            qty: self.volume / 2.0,
+            price: self.close,
+            order_side: OrderSide::Sell,
+        };
+        let trade_buy = Trade {
+            symbol: self.symbol.to_string(),
+            timestamp: self.close_time,
+            qty: self.volume / 2.0,
+            price: self.close,
+            order_side: OrderSide::Buy,
+        };
+        vec![trade_buy, trade_sell]
+    }
+
+    pub fn floor_price(&self, to: f64) -> f64 {
+        (self.close / to).floor() * 10.0
+    }
 
     pub fn from_binance_lookup(lookup: HashMap<String, Value>) -> ApiResult<Self> {
         let _kline = lookup.get("k").ok_or_else(|| {
