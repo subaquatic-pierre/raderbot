@@ -8,6 +8,10 @@ use crate::account::trade::OrderSide;
 use crate::market::interval::Interval;
 use crate::market::kline::Kline;
 
+use crate::analytics::period::{
+    determine_auction_period, is_within_n_min_of_next_period, AuctionPeriod, LastPeriodData,
+};
+
 use crate::analytics::volume::{
     BucketVolume, PriceVolume, PriceVolumeData, TimeVolume, TimeVolumeData, TradeVolume,
 };
@@ -18,21 +22,6 @@ use crate::utils::number::parse_usize_from_value;
 use crate::utils::time::{
     floor_mili_ts, generate_ts, string_to_timestamp, HOUR_AS_MILI, MIN_AS_MILI,
 };
-
-#[derive(Debug)]
-pub struct LastPeriodData {
-    high: f64,
-    low: f64,
-    period: AuctionPeriod,
-    start_time: String,
-    end_time: String,
-    kline_avg_vol: BucketVolume,
-    open_price: f64,
-    close_price: f64,
-    first_15_vol: BucketVolume,
-    last_15_vol: BucketVolume,
-    poc: Option<f64>,
-}
 
 pub struct VolumeContinuationReversal {
     klines: Vec<Kline>,
@@ -128,7 +117,7 @@ impl Algorithm for VolumeContinuationReversal {
     fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
         // get current period
         let new_period = determine_auction_period(&kline);
-        let is_within_15 = is_within_15_min_of_next_period(&kline);
+        let is_within_15 = is_within_n_min_of_next_period(15, &kline);
 
         // send closing signal if within 15min of next auction
         // currently in unknown period
@@ -230,108 +219,5 @@ impl Algorithm for VolumeContinuationReversal {
 
     fn clean_data_points(&mut self) {
         // unimplemented!()
-    }
-}
-
-// ASIA 01:00 - 05:00
-// EURO 07:00 - 10:00
-// NYAM 13:00 - 15:00
-// NYMD 17:00 - 18:00
-// NYPM 18:30 - 21:00
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-enum AuctionPeriod {
-    Asia,
-    Euro,
-    NYAM,
-    NYMD,
-    NYPM,
-    Unknown,
-}
-
-const ASIA_START: u64 = HOUR_AS_MILI * 1;
-const ASIA_END: u64 = HOUR_AS_MILI * 5;
-
-const EURO_START: u64 = HOUR_AS_MILI * 7;
-const EURO_END: u64 = HOUR_AS_MILI * 10;
-
-const NYAM_START: u64 = HOUR_AS_MILI * 13;
-const NYAM_END: u64 = HOUR_AS_MILI * 15;
-
-const NYMD_START: u64 = HOUR_AS_MILI * 17;
-const NYMD_END: u64 = HOUR_AS_MILI * 18;
-
-const NYPM_START: u64 = (HOUR_AS_MILI * 18) + MIN_AS_MILI * 30;
-const NYPM_END: u64 = HOUR_AS_MILI * 21;
-
-fn calc_window(start_of_day: u64, window_time: u64) -> u64 {
-    start_of_day + window_time
-}
-
-// Method to determine the auction period for a given kline
-fn determine_auction_period(kline: &Kline) -> AuctionPeriod {
-    let kline_time = kline.close_time; // Assuming close_time represents the time of the kline
-
-    // Calculate the current day's starting UTC time
-    let start_of_day = floor_mili_ts(kline.open_time, HOUR_AS_MILI * 24); // Round down to the start of the day
-
-    // Check ASIA window
-    if kline_time >= calc_window(start_of_day, ASIA_START)
-        && kline_time <= calc_window(start_of_day, ASIA_END)
-    {
-        AuctionPeriod::Asia
-    } else if kline_time >= calc_window(start_of_day, EURO_START)
-        && kline_time <= calc_window(start_of_day, EURO_END)
-    {
-        AuctionPeriod::Euro
-    } else if kline_time >= calc_window(start_of_day, NYAM_START)
-        && kline_time <= calc_window(start_of_day, NYAM_END)
-    {
-        AuctionPeriod::NYAM
-    } else if kline_time >= calc_window(start_of_day, NYMD_START)
-        && kline_time <= calc_window(start_of_day, NYMD_END)
-    {
-        AuctionPeriod::NYMD
-    } else if kline_time >= calc_window(start_of_day, NYPM_START)
-        && kline_time <= calc_window(start_of_day, NYPM_END)
-    {
-        AuctionPeriod::NYPM
-    } else {
-        AuctionPeriod::Unknown
-    }
-}
-
-fn is_within_15_min_of_next_period(kline: &Kline) -> bool {
-    let mut updated_kline = kline.clone();
-    updated_kline.close_time = kline.close_time + (5 * MIN_AS_MILI);
-
-    // Calculate the start of the next auction period based on the current kline time
-    let next_period_start = determine_auction_period(&updated_kline);
-
-    next_period_start != AuctionPeriod::Unknown
-}
-
-#[derive(Debug, PartialEq)]
-enum AuctionScenario {
-    BearAuctionContinuation,
-    BearAuctionReversal,
-    BullAuctionContinuation,
-    BullAuctionReversal,
-    Undefined, // Used when none of the scenarios match
-}
-
-fn determine_auction_scenario(last_period_data: &LastPeriodData) -> AuctionScenario {
-    let is_bearish = last_period_data.close_price < last_period_data.open_price;
-    let is_bullish = last_period_data.close_price > last_period_data.open_price;
-    let last_15_vol_higher = last_period_data.last_15_vol.buy_volume
-        + last_period_data.last_15_vol.sell_volume
-        > last_period_data.first_15_vol.buy_volume + last_period_data.first_15_vol.sell_volume;
-
-    match (is_bullish, is_bearish, last_15_vol_higher) {
-        (false, true, true) => AuctionScenario::BearAuctionContinuation,
-        (false, true, false) => AuctionScenario::BearAuctionReversal,
-        (true, false, true) => AuctionScenario::BullAuctionContinuation,
-        (true, false, false) => AuctionScenario::BullAuctionReversal,
-        _ => AuctionScenario::Undefined,
     }
 }
