@@ -10,6 +10,7 @@ use super::strategy::StrategyId;
 ///
 /// This can indicate a recommendation to enter a long position, enter a short position, or to make no trade (ignore).
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum AlgoEvalResult {
     Buy,
     Sell,

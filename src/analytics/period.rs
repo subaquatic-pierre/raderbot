@@ -53,12 +53,23 @@ pub enum AuctionScenario {
     Undefined, // Used when none of the scenarios match
 }
 
-pub fn determine_auction_scenario(last_period_data: &LastPeriodData) -> AuctionScenario {
-    let is_bearish = last_period_data.close_price < last_period_data.open_price;
-    let is_bullish = last_period_data.close_price > last_period_data.open_price;
-    let last_15_vol_higher = last_period_data.last_15_vol.buy_volume
-        + last_period_data.last_15_vol.sell_volume
-        > last_period_data.first_15_vol.buy_volume + last_period_data.first_15_vol.sell_volume;
+pub fn determine_auction_scenario(
+    last_period_data: &LastPeriodData,
+    reverse: bool,
+) -> AuctionScenario {
+    let (is_bearish, is_bullish, last_15_vol_higher) = if reverse {
+        let is_bearish = last_period_data.close_price > last_period_data.open_price;
+        let is_bullish = last_period_data.close_price < last_period_data.open_price;
+        let last_15_vol_higher =
+            last_period_data.last_15_vol.total() > last_period_data.first_15_vol.total();
+        (is_bearish, is_bullish, last_15_vol_higher)
+    } else {
+        let is_bearish = last_period_data.close_price < last_period_data.open_price;
+        let is_bullish = last_period_data.close_price > last_period_data.open_price;
+        let last_15_vol_higher =
+            last_period_data.last_15_vol.total() < last_period_data.first_15_vol.total();
+        (is_bearish, is_bullish, last_15_vol_higher)
+    };
 
     match (is_bullish, is_bearish, last_15_vol_higher) {
         (false, true, true) => AuctionScenario::BearAuctionContinuation,

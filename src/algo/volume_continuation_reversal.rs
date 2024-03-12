@@ -1,3 +1,4 @@
+use ::serde::{Deserialize, Serialize};
 use log::info;
 use serde_json::Value;
 use ta::indicators::SimpleMovingAverage;
@@ -9,7 +10,8 @@ use crate::market::interval::Interval;
 use crate::market::kline::Kline;
 
 use crate::analytics::period::{
-    determine_auction_period, is_within_n_min_of_next_period, AuctionPeriod, LastPeriodData,
+    determine_auction_period, determine_auction_scenario, is_within_n_min_of_next_period,
+    AuctionPeriod, AuctionScenario, LastPeriodData,
 };
 
 use crate::analytics::volume::{
@@ -23,12 +25,18 @@ use crate::utils::time::{
     floor_mili_ts, generate_ts, string_to_timestamp, HOUR_AS_MILI, MIN_AS_MILI,
 };
 
+#[derive(Debug, Serialize, Deserialize)]
+struct VolumeContinuationReversalParams {
+    reverse: Option<bool>,
+}
+
 pub struct VolumeContinuationReversal {
     klines: Vec<Kline>,
     // period_price_vol: PriceVolume,
     time_vol: TimeVolume,
     cur_period: AuctionPeriod,
     params: Value,
+    reverse: bool,
     sma: SimpleMovingAverage,
     last_period_data: Option<LastPeriodData>,
     last_result: Option<AlgoEvalResult>,
@@ -36,10 +44,13 @@ pub struct VolumeContinuationReversal {
 
 impl VolumeContinuationReversal {
     pub fn new(params: Value) -> Result<Self, AlgoError> {
+        let _params: VolumeContinuationReversalParams = serde_json::from_value(params.clone())?;
         let sma = SimpleMovingAverage::new(10).unwrap();
+
         Ok(Self {
             klines: vec![],
             time_vol: TimeVolume::new(Interval::Min1),
+            reverse: _params.reverse.unwrap_or_else(|| false),
             cur_period: AuctionPeriod::Unknown,
             params,
             last_result: None,
@@ -156,26 +167,20 @@ impl Algorithm for VolumeContinuationReversal {
             cur_vol.add_trades(&kline.make_trades());
 
             if let Some(last_data) = &self.last_period_data {
-                let LastPeriodData {
-                    first_15_vol,
-                    last_15_vol,
-                    close_price,
-                    open_price,
-                    ..
-                } = last_data;
-
+                // only send signal is no last_result
+                // last_result is cleared only n min before next auction
                 if self.last_result.is_none() {
-                    // info!(
-                    //     "NO LAST TRADE, EVALUATING IN UNKNOWN PERIOD: {kline:?}, VOL: {:?}",
-                    //     cur_vol.result()
-                    // );
-                    if first_15_vol.total() > last_15_vol.total() && close_price < open_price {
-                        self.last_result = Some(AlgoEvalResult::Sell);
-                        return AlgoEvalResult::Sell;
-                    } else if first_15_vol.total() < last_15_vol.total() && close_price > open_price
-                    {
-                        self.last_result = Some(AlgoEvalResult::Buy);
-                        return AlgoEvalResult::Buy;
+                    let res = match determine_auction_scenario(last_data, self.reverse) {
+                        AuctionScenario::BearAuctionContinuation => AlgoEvalResult::Sell,
+                        AuctionScenario::BearAuctionReversal => AlgoEvalResult::Buy,
+                        AuctionScenario::BullAuctionContinuation => AlgoEvalResult::Buy,
+                        AuctionScenario::BullAuctionReversal => AlgoEvalResult::Sell,
+                        _ => AlgoEvalResult::Ignore,
+                    };
+
+                    if res != AlgoEvalResult::Ignore {
+                        self.last_result = Some(res);
+                        return res;
                     }
                 }
             }

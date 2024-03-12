@@ -84,12 +84,12 @@ impl AlgoBuilder {
                 let algo = VolumeProfile::new(algorithm_params)?;
                 Ok(Box::new(algo))
             }
-            "VolumeContinuationReversal" => {
-                let algo = VolumeContinuationReversal::new(algorithm_params)?;
-                Ok(Box::new(algo))
-            }
             "VolumeContinuation" => {
                 let algo = VolumeContinuation::new(algorithm_params)?;
+                Ok(Box::new(algo))
+            }
+            "VolumeContinuationReversal" => {
+                let algo = VolumeContinuationReversal::new(algorithm_params)?;
                 Ok(Box::new(algo))
             }
             _ => Err(AlgoError::UnkownName(

@@ -17,4 +17,4 @@ Cargo.lock
 db
 .vscode
 data.json
-
+results/
