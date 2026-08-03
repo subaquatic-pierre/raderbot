@@ -69,7 +69,9 @@ MONGO_URI={NEW_URI}
 
 - In order to run `BootstrapKlineData` or `BootstrapTradeData` you will need to download the historical data first. The data can be downloaded from Binance, the data collections are:
 
-- https://www.binance.com/en-AU/landing/data
+- data.binance.vision (https://data.binance.vision) — the current data download portal, with ZIP files at data/spot/monthly/klines/<SYMBOL>/<INTERVAL>/ and aggTrades/
+- github.com/binance/binance-public-data (https://github.com/binance/binance-public-data) — the companion GitHub repo with Python/Shell download scripts, checksum verification, and full docs
+
   - K-Line
   - Aggregated Trades
 
