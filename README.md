@@ -29,7 +29,7 @@ The bot connects to the exchange API to receive real-time market data updates, i
 - In order to run backtests you will need historical data. Pleas see [Historical Data](#historical-data) section for details on how to get historical data for the bot.
 
 **Postman API Docs**:
-Current API docs can be found here: [Postman Docs](https://documenter.getpostman.com/view/22215488/2sA2xfYYa5)
+Current API docs can be found here: [Postman Docs](https://stackops.link/assets/files/RaderBot.postman_collection-3158aa9247b9957668d8811c48f807f4.json)
 
 1. Configure environment
 
