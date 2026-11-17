@@ -2,6 +2,7 @@ use crate::market::kline::Kline;
 use crate::market::trade::Trade;
 use crate::strategy::types::AlgoError;
 use crate::strategy::{algorithm::Algorithm, types::AlgoEvalResult};
+use fin_primitives::ta_compat::{indicators::RelativeStrengthIndex, Next};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
@@ -16,7 +17,13 @@ pub struct Rsi {
     data_points: Vec<Kline>,
     params: Value,
     rsi_period: usize,
-    rsi: f64, // Optional: Store the last calculated RSI value
+    rsi: f64, // Last calculated RSI value; NaN until `rsi_period + 1` klines are in
+    indicator: RelativeStrengthIndex,
+}
+
+fn rsi_indicator(period: usize) -> Result<RelativeStrengthIndex, AlgoError> {
+    RelativeStrengthIndex::new(period)
+        .map_err(|e| AlgoError::InvalidParams(format!("invalid rsi_period {period}: {e}")))
 }
 
 impl Rsi {
@@ -28,49 +35,25 @@ impl Rsi {
         Ok(Self {
             data_points: vec![],
             rsi_period,
-            rsi: 0.0,
+            rsi: f64::NAN,
             params,
+            indicator: rsi_indicator(rsi_period)?,
         })
     }
 
-    fn calculate_rsi(&mut self) -> f64 {
-        if self.data_points.len() < self.rsi_period {
-            return 0.0; // Not enough data to calculate RSI
-        }
-
-        let mut gains = 0.0;
-        let mut losses = 0.0;
-
-        for i in 1..=self.rsi_period {
-            let delta = self.data_points[self.data_points.len() - i].close
-                - self.data_points[self.data_points.len() - i - 1].close;
-            if delta > 0.0 {
-                gains += delta;
-            } else {
-                losses -= delta; // Losses are positive numbers
-            }
-        }
-
-        let avg_gain = gains / self.rsi_period as f64;
-        let avg_loss = losses / self.rsi_period as f64;
-
-        if avg_loss == 0.0 {
-            return 100.0; // Prevent division by zero
-        }
-
-        let rs = avg_gain / avg_loss;
-        let rsi = 100.0 - (100.0 / (1.0 + rs));
-
-        self.rsi = rsi; // Store the calculated RSI value
-        rsi
+    /// Wilder's RSI (the one TA-Lib and charting platforms show), updated with
+    /// the latest kline's close. NaN until `rsi_period + 1` closes are in, so
+    /// the `< 30` / `> 70` checks below do not fire during warm-up.
+    fn calculate_rsi(&mut self, close: f64) -> f64 {
+        self.rsi = self.indicator.next(close);
+        self.rsi
     }
 }
 
 impl Algorithm for Rsi {
     fn evaluate(&mut self, kline: Kline, trades: &[Trade]) -> AlgoEvalResult {
+        let rsi = self.calculate_rsi(kline.close);
         self.data_points.push(kline);
-
-        let rsi = self.calculate_rsi();
 
         // Example RSI logic: Buy if RSI < 30 (oversold), Sell if RSI > 70 (overbought), else Ignore
         let result = if rsi < 30.0 {
@@ -99,6 +82,15 @@ impl Algorithm for Rsi {
 
         let rsi_period = rsi_params.rsi_period.unwrap_or(self.rsi_period);
 
+        if rsi_period != self.rsi_period {
+            // A new period starts a fresh average from the stored klines.
+            let mut indicator = rsi_indicator(rsi_period)?;
+            self.rsi = self
+                .data_points
+                .iter()
+                .fold(f64::NAN, |_, k| indicator.next(k.close));
+            self.indicator = indicator;
+        }
         self.rsi_period = rsi_period;
         self.params = params;
 
@@ -112,6 +104,43 @@ impl Algorithm for Rsi {
         if self.data_points.len() > two_weeks_minutes {
             // reduce back to 1 week worth on data
             self.data_points.drain(0..10080);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn rsi_matches_wilder_and_waits_for_a_full_window() {
+        // Wilder's example closes; RSI(14) from TA-Lib on the same data.
+        let closes = [
+            44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.10, 45.42, 45.84, 46.08, 45.89, 46.03,
+            45.61, 46.28, 46.28, 46.00, 46.03, 46.41, 46.22, 45.64,
+        ];
+        let expected = [
+            70.46413502109704,
+            66.24961855355505,
+            66.48094183471265,
+            69.34685316290864,
+            66.29471265892623,
+            57.91502067008556,
+        ];
+        let mut rsi = Rsi::new(json!({ "rsi_period": 14 })).unwrap();
+        for (i, close) in closes.iter().enumerate() {
+            let value = rsi.calculate_rsi(*close);
+            if i < 14 {
+                // Before this change the first 14 klines read as RSI 0 (a Buy
+                // signal), and the 14th indexed before the start of the slice.
+                assert!(value.is_nan(), "kline {i}: {value}");
+            } else {
+                assert!(
+                    (value - expected[i - 14]).abs() < 1e-9,
+                    "kline {i}: {value}"
+                );
+            }
         }
     }
 }
